@@ -62,7 +62,7 @@
   /* charts */
   .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:6px;margin-bottom:10px;position:relative}
-  #price{height:380px} #rsi{height:130px}
+  #price{height:380px} #rsi{height:130px} #wt{height:150px}
   .lbl{position:absolute;top:10px;left:12px;font-size:10px;color:var(--dim);
     letter-spacing:1px;z-index:3;pointer-events:none}
   .lgd{position:absolute;top:10px;right:12px;font-size:10px;z-index:3;text-align:right;pointer-events:none;line-height:1.5}
@@ -115,6 +115,7 @@
     <div class="ind on" data-ind="fib">FIB</div>
     <div class="ind" data-ind="sr">SUPPORT/RES</div>
     <div class="ind" data-ind="proj">PROJECTION</div>
+    <div class="ind" data-ind="wt">WAVETREND</div>
   </div>
 
   <div class="strip" id="strip">
@@ -143,11 +144,15 @@
     <div class="lbl">RSI 14 · BUY/SELL DOTS</div>
     <div id="rsi"></div>
   </div>
+  <div class="chartwrap" id="wtwrap" style="display:none">
+    <div class="lbl">WAVETREND · MARKET CIPHER-B · CROSS DOTS</div>
+    <div id="wt"></div>
+  </div>
 
   <div class="note">
     <b>How signals fire:</b> a green BUY dot prints when momentum confluence flips up (RSI exiting oversold, price reclaiming EMA21, EMA9 crossing up, or a volume-spike green candle) and a red SELL dot prints on the mirror conditions. It needs 2+ confirmations and alternates buy→sell→buy so you don't get spammed. Fib levels auto-draw from the swing high/low in view.<br><br>
     <b>Are the dots real?</b> Yes — they're computed live from actual candle data, not random. They're lagging momentum signals (TA), not predictions. The newest forming candle can repaint until it closes, then its dot locks in. <b>LIVE</b> updates price every 6s + candles every 60s. <b>MCAP</b> rescales the chart to market cap. <b>DEX ⧉</b> swaps in DexScreener's true tick chart.<br><br>
-    <b>Indicator buttons:</b> <b>VOL</b> = volume bars; <b>BOLLINGER</b> = 20-period SMA ±2σ band (volatility squeeze/expansion); <b>FIB</b> = auto Fibonacci off the swing high/low in view; <b>SUPPORT/RES</b> = auto levels clustered from swing pivots (thicker = more touches); <b>PROJECTION</b> = a linear-regression trend extended forward with a widening cone. The projection is a math extrapolation of the current trend, <b>not a prediction</b> — it shows where price goes <i>if</i> the trend holds. Everything recomputes on every live tick and rescales with PRICE/MCAP.<br><br>
+    <b>Indicator buttons:</b> <b>VOL</b> = volume bars; <b>BOLLINGER</b> = 20-period SMA ±2σ band (volatility squeeze/expansion); <b>FIB</b> = auto Fibonacci off the swing high/low in view; <b>SUPPORT/RES</b> = auto levels clustered from swing pivots (thicker = more touches); <b>PROJECTION</b> = a linear-regression trend extended forward with a widening cone. The projection is a math extrapolation of the current trend, <b>not a prediction</b> — it shows where price goes <i>if</i> the trend holds. <b>WAVETREND</b> opens a Market Cipher-B style oscillator pane: the cyan wave + blue signal line, with green dots on bullish crosses (esp. below the −60 oversold band) and red dots on bearish crosses (above +60). Everything recomputes on every live tick and rescales with PRICE/MCAP.<br><br>
     <b>Heads up — this is not financial advice.</b> Memecoins are extremely high risk; indicators describe momentum, they don't predict rugs, LP pulls, or dev wallets. Size accordingly.<br><br>
     <b>If the chart stays empty in this preview:</b> Claude's in-chat sandbox can block outside data feeds. Download this file and open it directly, or drop it on Netlify/Vercel — it'll pull live data fine from there.
   </div>
@@ -231,6 +236,31 @@ function projection(c,lookback=40,fwd=14){
     lo.push({time:t,value:Math.max(val-spread,0)});
   }
   return {mid,up,lo,slope};
+}
+/* WaveTrend (LazyBear / Market Cipher-B). scale-invariant oscillator on hlc3.
+   wt1 = ema(ci, n2), wt2 = sma(wt1,4); cross dots where wt1 crosses wt2. */
+function emaArr(a,p){const k=2/(p+1),out=Array(a.length).fill(null);let prev=null;
+  for(let i=0;i<a.length;i++){const v=a[i];if(v==null){out[i]=prev;continue;}
+    prev=prev==null?v:v*k+prev*(1-k);out[i]=prev;}return out;}
+function waveTrend(c,n1=10,n2=21){
+  const ap=c.map(x=>(x.high+x.low+x.close)/3);
+  const esa=emaArr(ap,n1);
+  const dabs=ap.map((v,i)=>esa[i]==null?null:Math.abs(v-esa[i]));
+  const d=emaArr(dabs,n1);
+  const ci=ap.map((v,i)=>(esa[i]==null||d[i]==null||d[i]===0)?null:(v-esa[i])/(0.015*d[i]));
+  const wt1=emaArr(ci,n2);
+  const wt2=Array(wt1.length).fill(null);
+  for(let i=0;i<wt1.length;i++){if(i<3)continue;let s=0,ok=true;
+    for(let j=i-3;j<=i;j++){if(wt1[j]==null){ok=false;break;}s+=wt1[j];}if(ok)wt2[i]=s/4;}
+  const dots=[];
+  for(let i=1;i<c.length;i++){
+    if(wt1[i]==null||wt2[i]==null||wt1[i-1]==null||wt2[i-1]==null)continue;
+    const crossUp=wt1[i-1]<=wt2[i-1]&&wt1[i]>wt2[i];
+    const crossDn=wt1[i-1]>=wt2[i-1]&&wt1[i]<wt2[i];
+    if(crossUp)dots.push({time:c[i].time,value:wt2[i],up:true});
+    else if(crossDn)dots.push({time:c[i].time,value:wt2[i],up:false});
+  }
+  return {wt1,wt2,dots};
 }
 
 /* ---------- signal engine ---------- */
@@ -328,8 +358,10 @@ let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
 /* indicator series */
 let vols,bbMid,bbUp,bbLo,projMid,projUp,projLo;
 let srLines=[];
+/* wavetrend pane */
+let wtchart,wt1s,wt2s,wtArea;
 /* indicator toggle state */
-const ind={vol:false,bb:false,fib:true,sr:false,proj:false};
+const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false};
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
@@ -360,10 +392,23 @@ function initCharts(){
   rs.createPriceLine({price:70,color:'#ff4d6d',lineWidth:1,lineStyle:2,axisLabelVisible:true});
   rs.createPriceLine({price:30,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
   rs.createPriceLine({price:50,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
-  pchart.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)rchart.timeScale().setVisibleLogicalRange(r);});
-  rchart.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)pchart.timeScale().setVisibleLogicalRange(r);});
+  // wavetrend pane
+  wtchart=LightweightCharts.createChart(document.getElementById('wt'),{...common,height:150});
+  wtArea=wtchart.addAreaSeries({lineColor:'#22d3ee',topColor:'rgba(34,211,238,0.28)',bottomColor:'rgba(34,211,238,0.02)',
+    lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  wt2s=wtchart.addLineSeries({color:'#5b8dff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  wt1s=wtArea;
+  wtArea.createPriceLine({price:60,color:'#ff4d6d',lineWidth:1,lineStyle:2,axisLabelVisible:true});
+  wtArea.createPriceLine({price:-60,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
+  wtArea.createPriceLine({price:0,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
+  // sync all panes' visible range
+  const charts=[pchart,rchart,wtchart];let syncing=false;
+  charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
+    if(!r||syncing)return;syncing=true;
+    charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
   new ResizeObserver(()=>{pchart.applyOptions({width:document.getElementById('price').clientWidth});
-    rchart.applyOptions({width:document.getElementById('rsi').clientWidth});}).observe(document.getElementById('price'));
+    rchart.applyOptions({width:document.getElementById('rsi').clientWidth});
+    wtchart.applyOptions({width:document.getElementById('wt').clientWidth});}).observe(document.getElementById('price'));
   ready=true;
 }
 function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
@@ -395,6 +440,13 @@ function render(c,meta){
     if(pj){projMid.setData(pj.mid);projUp.setData(pj.up);projLo.setData(pj.lo);onTags.push('PROJ');}
     else{projMid.setData([]);projUp.setData([]);projLo.setData([]);}}
   else {projMid.setData([]);projUp.setData([]);projLo.setData([]);}
+  // wavetrend (scale-invariant oscillator in its own pane)
+  if(ind.wt){const wt=waveTrend(disp,10,21);
+    wt1s.setData(lineData(disp,wt.wt1));wt2s.setData(lineData(disp,wt.wt2));
+    wt1s.setMarkers(wt.dots.map(d=>({time:d.time,position:d.up?'belowBar':'aboveBar',
+      color:d.up?'#16ff9e':'#ff4d6d',shape:'circle',text:''})));
+    onTags.push('WT');}
+  else {wt1s.setData([]);wt2s.setData([]);wt1s.setMarkers([]);}
   // support / resistance lines
   srLines.forEach(l=>cs.removePriceLine(l));srLines=[];
   if(ind.sr){for(const lv of srLevels(disp,5)){
@@ -501,6 +553,9 @@ document.getElementById('modegroup').addEventListener('click',e=>{
 document.getElementById('indrow').addEventListener('click',e=>{
   const t=e.target.closest('.ind');if(!t)return;
   const key=t.dataset.ind;ind[key]=!ind[key];t.classList.toggle('on',ind[key]);
+  if(key==='wt'){document.getElementById('wtwrap').style.display=ind.wt?'':'none';
+    if(ind.wt&&wtchart){wtchart.applyOptions({width:document.getElementById('wt').clientWidth});
+      wtchart.timeScale().setVisibleLogicalRange(pchart.timeScale().getVisibleLogicalRange());}}
   if(candlesRaw.length)render(candlesRaw,metaCur);});
 document.getElementById('live').onclick=function(){
   this.classList.toggle('on');
