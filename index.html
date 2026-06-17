@@ -6,6 +6,7 @@
 <title>DEGEN SIGNAL TERMINAL</title>
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>window.LightweightCharts||document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#070809;
@@ -73,14 +74,89 @@
     padding-top:10px;margin-top:6px}
   .note b{color:var(--amber)}
   a{color:var(--mid)}
+  /* ---- tabs ---- */
+  .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:5px;margin-bottom:12px;position:sticky;top:8px;z-index:20;
+    backdrop-filter:blur(8px);overflow-x:auto}
+  .tab{flex:1;min-width:74px;text-align:center;padding:9px 6px;border-radius:8px;cursor:pointer;
+    font-size:11px;letter-spacing:1px;color:var(--dim);user-select:none;white-space:nowrap;
+    transition:background .12s,color .12s}
+  .tab .ti{font-size:13px;display:block;margin-bottom:2px}
+  .tab.on{background:var(--panel2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--line)}
+  .tab.on[data-tab="chart"]{color:var(--buy)}
+  .panel-view{display:none;animation:fade .18s ease}
+  .panel-view.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  /* ---- trade bar ---- */
+  .tradebar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+  .tradebar .fld{display:flex;flex-direction:column;gap:3px}
+  .tradebar .fld label{font-size:8px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+  .tradebar input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:7px 9px;font:inherit;font-size:13px;width:84px}
+  .bbuy{background:var(--buy);color:#02160d}
+  .bshort{background:var(--sell);color:#fff}
+  .bclose{background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  .tradebar .btn{padding:0 14px;height:36px;align-self:flex-end}
+  .poschip{margin-left:auto;font-size:11px;color:var(--dim);text-align:right;line-height:1.5}
+  .poschip b{color:var(--txt)}
+  /* ---- tables ---- */
+  .tbl{width:100%;border-collapse:collapse;font-size:11px}
+  .tbl th{text-align:left;color:var(--dim);font-weight:600;letter-spacing:.5px;
+    padding:7px 8px;border-bottom:1px solid var(--line);text-transform:uppercase;font-size:9px;white-space:nowrap}
+  .tbl td{padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .tbl tr:hover td{background:var(--panel2)}
+  .tbl .mini{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:6px;padding:5px 9px;font:inherit;font-size:11px;cursor:pointer}
+  .tbl .mini:hover{border-color:var(--sell);color:var(--sell)}
+  .tbl input.note-in{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:6px;padding:5px 7px;font:inherit;font-size:11px;width:100%;min-width:120px}
+  .empty{color:var(--dim);font-size:12px;padding:24px 8px;text-align:center}
+  .sect{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px;margin-bottom:12px}
+  .sect h3{margin:0 0 10px;font-size:11px;letter-spacing:1.5px;color:var(--dim);
+    text-transform:uppercase;font-weight:700}
+  /* ---- stats grid ---- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px}
+  .stat .k{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .stat .v{font-size:20px;font-weight:800;margin-top:4px}
+  #equity{height:200px}
+  /* ---- settings ---- */
+  .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .frm .fld{display:flex;flex-direction:column;gap:4px}
+  .frm label{font-size:9px;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+  .frm input{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:8px 10px;font:inherit;font-size:13px}
+  .togrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .tog{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:8px;
+    padding:8px 12px;font-size:11px;cursor:pointer;user-select:none;letter-spacing:.5px}
+  .tog.on{background:var(--panel);border-color:var(--buy);color:var(--buy);font-weight:700}
+  .actrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .actrow .btn{padding:9px 14px;height:auto}
+  .ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  .sql{background:#05060a;border:1px solid var(--line);border-radius:8px;padding:12px;
+    font-size:10px;color:var(--dim);white-space:pre-wrap;line-height:1.5;overflow-x:auto;user-select:all}
+  .cloudbadge{font-size:10px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .cloudbadge.on{color:var(--buy);border-color:var(--buy)}
 </style>
 </head>
 <body>
   <div class="head">
     <div class="logo"><span class="b">SIGNAL</span> // <span class="s">TERMINAL</span></div>
     <div class="tag">dexscreener feed</div>
+    <span class="cloudbadge" id="cloudbadge" style="margin-left:auto">● local</span>
   </div>
 
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-tab="chart"><span class="ti">▤</span>CHART</div>
+    <div class="tab" data-tab="paper"><span class="ti">◧</span>PAPER</div>
+    <div class="tab" data-tab="journal"><span class="ti">✎</span>JOURNAL</div>
+    <div class="tab" data-tab="stats"><span class="ti">◔</span>STATS</div>
+    <div class="tab" data-tab="settings"><span class="ti">⚙</span>SETTINGS</div>
+  </div>
+
+  <div class="panel-view on" id="view-chart">
   <div class="controls">
     <input id="addr" placeholder="paste DexScreener link or pool/pair address" />
     <select id="chain">
@@ -129,6 +205,16 @@
     <div class="cell"><div class="k">Vol 24h</div><div class="v" id="m-vol">—</div></div>
   </div>
 
+  <div class="tradebar" id="tradebar">
+    <div class="fld"><label>Size $</label><input id="t-size" type="number" placeholder="auto" /></div>
+    <div class="fld"><label>Stop %</label><input id="t-sl" type="number" placeholder="off" /></div>
+    <div class="fld"><label>Target %</label><input id="t-tp" type="number" placeholder="off" /></div>
+    <button class="btn bbuy" id="t-buy">BUY</button>
+    <button class="btn bshort" id="t-short">SHORT</button>
+    <button class="btn bclose" id="t-close">CLOSE</button>
+    <div class="poschip" id="poschip">no open position</div>
+  </div>
+
   <div class="status" id="status">Paste a token and hit LOAD. Tip: open the chart on dexscreener.com, copy the page link, paste it here.</div>
 
   <div class="chartwrap" id="pricewrap">
@@ -155,6 +241,97 @@
     <b>Indicator buttons:</b> <b>VOL</b> = volume bars; <b>BOLLINGER</b> = 20-period SMA ±2σ band (volatility squeeze/expansion); <b>FIB</b> = auto Fibonacci off the swing high/low in view; <b>SUPPORT/RES</b> = auto levels clustered from swing pivots (thicker = more touches); <b>PROJECTION</b> = a linear-regression trend extended forward with a widening cone. The projection is a math extrapolation of the current trend, <b>not a prediction</b> — it shows where price goes <i>if</i> the trend holds. <b>WAVETREND</b> opens a Market Cipher-B style oscillator pane: the cyan wave + blue signal line, with green dots on bullish crosses (esp. below the −60 oversold band) and red dots on bearish crosses (above +60). Everything recomputes on every live tick and rescales with PRICE/MCAP.<br><br>
     <b>Heads up — this is not financial advice.</b> Memecoins are extremely high risk; indicators describe momentum, they don't predict rugs, LP pulls, or dev wallets. Size accordingly.<br><br>
     <b>If the chart stays empty in this preview:</b> Claude's in-chat sandbox can block outside data feeds. Download this file and open it directly, or drop it on Netlify/Vercel — it'll pull live data fine from there.
+  </div>
+  </div><!-- /view-chart -->
+
+  <!-- ============ PAPER ============ -->
+  <div class="panel-view" id="view-paper">
+    <div class="stats" id="acct-stats" style="margin-bottom:12px"></div>
+    <div class="sect">
+      <h3>Open positions</h3>
+      <div id="open-wrap"><div class="empty">No open positions. Load a token on the CHART tab and hit BUY/SHORT.</div></div>
+    </div>
+    <div class="sect">
+      <h3>Recent closed trades</h3>
+      <div id="recent-wrap"><div class="empty">No closed trades yet.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ JOURNAL ============ -->
+  <div class="panel-view" id="view-journal">
+    <div class="sect">
+      <h3>Trade journal — add notes &amp; tags to learn from every trade</h3>
+      <div id="journal-wrap"><div class="empty">Closed trades will appear here. Tag your setups and write what you saw — that's how you build the skill.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ STATS ============ -->
+  <div class="panel-view" id="view-stats">
+    <div class="stats" id="perf-stats" style="margin-bottom:12px"></div>
+    <div class="sect">
+      <h3>Equity curve</h3>
+      <div id="equity"></div>
+    </div>
+    <div class="sect">
+      <h3>Edge by signal factor — what's actually working</h3>
+      <div id="factor-wrap"><div class="empty">Trade more to build a sample. Each factor's win rate updates as signals get graded.</div></div>
+    </div>
+  </div>
+
+  <!-- ============ SETTINGS ============ -->
+  <div class="panel-view" id="view-settings">
+    <div class="sect">
+      <h3>Account &amp; risk</h3>
+      <div class="frm">
+        <div class="fld"><label>Starting bankroll $</label><input id="s-bankroll" type="number" /></div>
+        <div class="fld"><label>Default size % of equity</label><input id="s-size" type="number" /></div>
+        <div class="fld"><label>Fee (bps per side)</label><input id="s-fee" type="number" /></div>
+        <div class="fld"><label>Slippage (bps)</label><input id="s-slip" type="number" /></div>
+        <div class="fld"><label>Auto-grade after N bars</label><input id="s-grade" type="number" /></div>
+        <div class="fld"><label>Auto-follow min confidence %</label><input id="s-conf" type="number" /></div>
+      </div>
+      <div class="togrow">
+        <div class="tog" id="s-autofollow">AUTO-FOLLOW SIGNALS</div>
+        <div class="tog" id="s-allowshort">ALLOW SHORTS</div>
+      </div>
+      <div class="actrow"><button class="btn" id="s-save">SAVE SETTINGS</button>
+        <button class="btn ghost" id="s-reset">RESET ACCOUNT</button></div>
+    </div>
+    <div class="sect">
+      <h3>Data — export / import</h3>
+      <div class="actrow">
+        <button class="btn ghost" id="s-export">EXPORT JSON</button>
+        <button class="btn ghost" id="s-import">IMPORT JSON</button>
+        <input id="s-file" type="file" accept="application/json" style="display:none" />
+      </div>
+    </div>
+    <div class="sect">
+      <h3>Cloud sync (Supabase) — optional</h3>
+      <div class="frm">
+        <div class="fld"><label>Supabase URL</label><input id="s-suburl" placeholder="https://xxxx.supabase.co" /></div>
+        <div class="fld"><label>Anon public key</label><input id="s-subkey" placeholder="eyJhbGci…" /></div>
+        <div class="fld"><label>Your email</label><input id="s-email" placeholder="you@email.com" /></div>
+      </div>
+      <div class="actrow">
+        <button class="btn" id="s-magic">SEND MAGIC LINK</button>
+        <button class="btn ghost" id="s-syncnow">SYNC NOW</button>
+        <button class="btn ghost" id="s-signout">SIGN OUT</button>
+      </div>
+      <div class="note" style="border:0;padding:0;margin-top:10px">
+        <b>How to turn on cloud sync (free):</b><br>
+        1. Make a free project at supabase.com → Project Settings → API → copy the <b>Project URL</b> and <b>anon public</b> key into the fields above.<br>
+        2. In the Supabase SQL editor, paste &amp; run this:
+        <div class="sql" id="sql-snippet">create table if not exists app_state (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table app_state enable row level security;
+create policy "own row" on app_state for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);</div>
+        3. Put your email above, hit <b>SEND MAGIC LINK</b>, click the link in your inbox, come back and hit <b>SYNC NOW</b>. Your account, trades, and signal memory now follow you across devices. The anon key is safe to keep in this public file — Row-Level Security means each user only ever sees their own row.
+      </div>
+    </div>
   </div>
 
 <script>
@@ -271,20 +448,24 @@ function signals(c){
   const vavg=i=>{let s=0,n=0;for(let j=Math.max(0,i-20);j<i;j++){s+=c[j].volume;n++;}return n?s/n:0;};
   for(let i=2;i<c.length;i++){
     if(e21[i]==null||r[i]==null||r[i-1]==null)continue;
-    const av=vavg(i);let buy=0,sell=0;
-    if(r[i-1]<30&&r[i]>=30)buy++;
-    if(closes[i-1]<e21[i-1]&&closes[i]>e21[i])buy++;
-    if(e9[i-1]!=null&&e21[i-1]!=null&&e9[i-1]<=e21[i-1]&&e9[i]>e21[i])buy++;
-    if(c[i].close>c[i].open&&av>0&&c[i].volume>av*1.6)buy++;
-    if(r[i-1]>70&&r[i]<=70)sell++;
-    if(closes[i-1]>e21[i-1]&&closes[i]<e21[i])sell++;
-    if(e9[i-1]!=null&&e9[i-1]>=e21[i-1]&&e9[i]<e21[i])sell++;
-    if(c[i].close<c[i].open&&av>0&&c[i].volume>av*1.6)sell++;
+    const av=vavg(i);
+    const bf={rsiOS:r[i-1]<30&&r[i]>=30,
+      emaReclaim:closes[i-1]<e21[i-1]&&closes[i]>e21[i],
+      emaCross:e9[i-1]!=null&&e21[i-1]!=null&&e9[i-1]<=e21[i-1]&&e9[i]>e21[i],
+      volSpike:c[i].close>c[i].open&&av>0&&c[i].volume>av*1.6};
+    const sf={rsiOB:r[i-1]>70&&r[i]<=70,
+      emaLose:closes[i-1]>e21[i-1]&&closes[i]<e21[i],
+      emaXdn:e9[i-1]!=null&&e9[i-1]>=e21[i-1]&&e9[i]<e21[i],
+      volSpikeDn:c[i].close<c[i].open&&av>0&&c[i].volume>av*1.6};
+    const buy=Object.values(bf).filter(Boolean).length;
+    const sell=Object.values(sf).filter(Boolean).length;
     if(buy>=2&&pos!=='long'&&i-last>=2){
-      markers.push({time:c[i].time,position:'belowBar',color:'#16ff9e',shape:'circle',text:'B',_i:i,_r:r[i]});
+      markers.push({time:c[i].time,position:'belowBar',color:'#16ff9e',shape:'circle',text:'B',_i:i,_r:r[i],
+        side:'long',factors:Object.keys(bf).filter(k=>bf[k])});
       pos='long';last=i;
     }else if(sell>=2&&pos==='long'&&i-last>=2){
-      markers.push({time:c[i].time,position:'aboveBar',color:'#ff4d6d',shape:'circle',text:'S',_i:i,_r:r[i]});
+      markers.push({time:c[i].time,position:'aboveBar',color:'#ff4d6d',shape:'circle',text:'S',_i:i,_r:r[i],
+        side:'short',factors:Object.keys(sf).filter(k=>sf[k])});
       pos='flat';last=i;
     }}
   return {e9,e21,e50,r,markers,pos};
@@ -485,6 +666,7 @@ function render(c,meta){
   if(s.pos==='long'){sigEl.textContent='● LONG — holding buy';sigEl.className='v sig-long';}
   else if(lastMk&&lastMk.text==='S'){sigEl.textContent='○ FLAT — last was sell';sigEl.className='v sig-short';}
   else{sigEl.textContent='○ FLAT — waiting';sigEl.className='v sig-flat';}
+  try{onRender(disp,s,meta);}catch(e){}
   setStatus(`loaded ${c.length} candles · ${s.markers.length} signals · ${curTF}`,false);
 }
 function fmtPrice(p){if(!p)return'0';if(p>=1)return p.toFixed(4);
@@ -575,6 +757,502 @@ document.getElementById('embed').onclick=function(){
   ew.style.display=on?'':'none'; pw.style.display=on?'none':'';
   syncEmbed();
 };
+
+/* ===================================================================
+   PAPER TRADING + SIGNAL MEMORY + CLOUD SYNC
+   =================================================================== */
+const SKEY='st_state_v1';
+const DEF_SETTINGS={feeBps:30,slipBps:20,sizePct:10,gradeBars:8,autoConf:60,
+  autoFollow:false,allowShort:false,sbUrl:'',sbKey:'',email:''};
+let STATE=loadState();
+let sb=null, sbUser=null, pushTimer=null;
+
+function freshState(bankroll=10000){
+  return {bankroll,cash:bankroll,settings:{...DEF_SETTINGS},
+    positions:[],trades:[],signals:{},version:1};
+}
+function loadState(){
+  try{const raw=localStorage.getItem(SKEY);if(raw){const s=JSON.parse(raw);
+    s.settings={...DEF_SETTINGS,...(s.settings||{})};
+    s.positions=s.positions||[];s.trades=s.trades||[];s.signals=s.signals||{};
+    return s;}}catch(e){}
+  return freshState();
+}
+function saveState(){
+  try{localStorage.setItem(SKEY,JSON.stringify(STATE));}catch(e){}
+  if(sb&&sbUser){clearTimeout(pushTimer);pushTimer=setTimeout(cloudPush,1500);}
+}
+/* current token id, stable across PRICE/MCAP/timeframe-agnostic but tf-specific */
+function tokenId(){return lastReq?`${lastReq.net}:${lastReq.pool}`:'none';}
+function tokenSym(){return (metaCur&&metaCur.name)||tokenId();}
+/* live price in REAL terms (not mcap-scaled) */
+function livePrice(){
+  if(metaCur&&metaCur.price)return metaCur.price;
+  if(candlesRaw.length)return candlesRaw[candlesRaw.length-1].close;
+  return 0;
+}
+
+/* ---------- cloud (Supabase) ---------- */
+function cloudInit(){
+  const {sbUrl,sbKey}=STATE.settings;
+  if(!sbUrl||!sbKey||!window.supabase){sb=null;sbUser=null;cloudBadge();return;}
+  try{
+    sb=window.supabase.createClient(sbUrl,sbKey);
+    sb.auth.getSession().then(({data})=>{sbUser=data.session?.user||null;cloudBadge();
+      if(sbUser)cloudPull();});
+    sb.auth.onAuthStateChange((_e,session)=>{sbUser=session?.user||null;cloudBadge();
+      if(sbUser)cloudPull();});
+  }catch(e){sb=null;}
+  cloudBadge();
+}
+function cloudBadge(){
+  const b=document.getElementById('cloudbadge');if(!b)return;
+  if(sb&&sbUser){b.textContent='● cloud · '+(sbUser.email||'synced');b.className='cloudbadge on';}
+  else if(sb){b.textContent='● cloud · signed out';b.className='cloudbadge';}
+  else{b.textContent='● local';b.className='cloudbadge';}
+}
+async function cloudPush(){
+  if(!sb||!sbUser)return;
+  try{await sb.from('app_state').upsert({user_id:sbUser.id,data:STATE,updated_at:new Date().toISOString()});}catch(e){}
+}
+async function cloudPull(){
+  if(!sb||!sbUser)return;
+  try{const {data}=await sb.from('app_state').select('data').eq('user_id',sbUser.id).maybeSingle();
+    if(data&&data.data){const r=data.data;r.settings={...STATE.settings,...(r.settings||{})};
+      // keep local cloud creds (don't let a blank remote wipe them)
+      r.settings.sbUrl=STATE.settings.sbUrl;r.settings.sbKey=STATE.settings.sbKey;r.settings.email=STATE.settings.email;
+      STATE=r;saveState();refreshAllUI();setStatus('cloud synced',false);}
+    else{cloudPush();}
+  }catch(e){}
+}
+
+/* ---------- paper engine ----------
+   Accounting: cash holds realized cashflow. A long pays cash on open (qty*px)
+   and receives it back on close; a short receives proceeds on open and repays
+   (buys back) on close. Equity = cash + market value of every open position:
+   a long owns the asset (+qty*px); a short owes a buy-back (-qty*px). This makes
+   equity == bankroll + realized + unrealized PnL for both sides. */
+function equityNow(){
+  let eq=STATE.cash;
+  for(const p of STATE.positions){
+    const px=(p.token===tokenId())?livePrice():(p.lastPx||p.entry);
+    eq+= p.side==='long' ? p.qty*px : -p.qty*px;
+  }
+  return eq;
+}
+function openPos(side){
+  const px=livePrice();
+  if(!px){setStatus('load a token first',true);return;}
+  if(side==='short'&&!STATE.settings.allowShort){setStatus('shorts are off — enable in Settings',true);return;}
+  const id=tokenId();
+  const exist=STATE.positions.find(p=>p.token===id);
+  if(exist){
+    if(exist.side===side){setStatus('already in a '+side+' on this token',true);return;}
+    closePos(id,'flip'); // opposite signal closes first
+  }
+  const slipPx=px*(1+ (side==='long'?1:-1)*STATE.settings.slipBps/1e4);
+  const sizeInput=parseFloat(document.getElementById('t-size').value);
+  const eq=equityNow();
+  const notional=sizeInput>0?sizeInput:eq*STATE.settings.sizePct/100;
+  if(notional<=0||notional>STATE.cash+1e-9&&side==='long'){/* allow; paper */}
+  const qty=notional/slipPx;
+  const fee=notional*STATE.settings.feeBps/1e4;
+  const slPct=parseFloat(document.getElementById('t-sl').value);
+  const tpPct=parseFloat(document.getElementById('t-tp').value);
+  const sl=slPct>0?(side==='long'?slipPx*(1-slPct/100):slipPx*(1+slPct/100)):null;
+  const tp=tpPct>0?(side==='long'?slipPx*(1+tpPct/100):slipPx*(1-tpPct/100)):null;
+  // cashflow: long pays cash; short receives proceeds; fee always reduces cash
+  STATE.cash += (side==='long'? -(qty*slipPx) : (qty*slipPx)) - fee;
+  const riskUsd=sl?Math.abs(slipPx-sl)*qty:null;
+  STATE.positions.push({id:'p'+Date.now(),token:id,sym:tokenSym(),tf:curTF,side,qty,
+    entry:slipPx,sl,tp,riskUsd,feeIn:fee,openT:Math.floor(Date.now()/1000),
+    auto:false,lastPx:px});
+  saveState();
+  setStatus(`opened ${side.toUpperCase()} ${tokenSym()} · $${fmtBig(notional)} @ ${fmtPrice(slipPx)}`,false);
+  refreshTradeUI();
+}
+function closePos(id,reason){
+  const i=STATE.positions.findIndex(p=>p.id===id);
+  if(i<0)return;
+  const p=STATE.positions[i];
+  const px=(p.token===tokenId())?livePrice():(p.lastPx||p.entry);
+  const slipPx=px*(1+ (p.side==='long'?-1:1)*STATE.settings.slipBps/1e4);
+  const notional=p.qty*slipPx;
+  const fee=notional*STATE.settings.feeBps/1e4;
+  STATE.cash += (p.side==='long'? (p.qty*slipPx) : -(p.qty*slipPx)) - fee;
+  const pnl = p.side==='long' ? (slipPx-p.entry)*p.qty - p.feeIn - fee
+                              : (p.entry-slipPx)*p.qty - p.feeIn - fee;
+  const R = p.riskUsd ? pnl/p.riskUsd : null;
+  STATE.trades.push({id:p.id,token:p.token,sym:p.sym,tf:p.tf,side:p.side,qty:p.qty,
+    entry:p.entry,exit:slipPx,pnl,R,fees:p.feeIn+fee,auto:p.auto,reason:reason||'manual',
+    openT:p.openT,closeT:Math.floor(Date.now()/1000),note:'',tags:''});
+  STATE.positions.splice(i,1);
+  saveState();
+  setStatus(`closed ${p.side.toUpperCase()} ${p.sym} · PnL $${pnl.toFixed(2)}${R!=null?` (${R.toFixed(2)}R)`:''}`,pnl<0);
+  refreshTradeUI();
+}
+function closeCurrent(){
+  const id=tokenId();const p=STATE.positions.find(x=>x.token===id);
+  if(!p){setStatus('no open position on this token',true);return;}
+  closePos(p.id,'manual');
+}
+/* SL/TP auto-close + mark-to-market on each price update */
+function checkStops(){
+  const id=tokenId(),px=livePrice();if(!px)return;
+  for(const p of STATE.positions){
+    if(p.token!==id)continue;p.lastPx=px;
+    if(p.side==='long'){
+      if(p.sl&&px<=p.sl){closePos(p.id,'stop');return;}
+      if(p.tp&&px>=p.tp){closePos(p.id,'target');return;}
+    }else{
+      if(p.sl&&px>=p.sl){closePos(p.id,'stop');return;}
+      if(p.tp&&px<=p.tp){closePos(p.id,'target');return;}
+    }
+  }
+}
+
+/* ===================================================================
+   SIGNAL MEMORY  —  log every fired signal, grade it after N bars,
+   learn per-factor win rates, derive an adaptive confidence score.
+   This is statistics, not deep ML: it tells you which of your setups
+   actually have an edge so you trade the good ones bigger.
+   =================================================================== */
+const FACTOR_LABEL={rsiOS:'RSI oversold flip',emaReclaim:'Reclaim EMA21',emaCross:'EMA9×21 up',
+  volSpike:'Vol-spike green',rsiOB:'RSI overbought flip',emaLose:'Lose EMA21',
+  emaXdn:'EMA9×21 down',volSpikeDn:'Vol-spike red'};
+let lastAutoId=null;
+
+function processSignals(disp,s){
+  if(!lastReq||!candlesRaw.length)return;
+  const tf=curTF,tk=tokenId();
+  // log newly-seen signals
+  for(const m of s.markers){
+    const id=`${tk}|${tf}|${m.time}|${m.side}`;
+    if(!STATE.signals[id]){
+      const entry=(candlesRaw[m._i]&&candlesRaw[m._i].close)||null;
+      STATE.signals[id]={id,token:tk,sym:tokenSym(),tf,time:m.time,side:m.side,
+        factors:m.factors||[],entry,status:'pending',ret:null,gradedAt:null};
+    }
+  }
+  // grade pending signals for this token/tf once enough bars have printed
+  const g=STATE.settings.gradeBars;
+  let changed=false;
+  for(const id in STATE.signals){
+    const sg=STATE.signals[id];
+    if(sg.status!=='pending'||sg.token!==tk||sg.tf!==tf||!sg.entry)continue;
+    const idx=candlesRaw.findIndex(x=>x.time===sg.time);
+    if(idx<0)continue;
+    if(idx+g<candlesRaw.length){
+      const fwd=candlesRaw[idx+g].close;
+      const ret=sg.side==='long'?(fwd-sg.entry)/sg.entry:(sg.entry-fwd)/sg.entry;
+      sg.ret=ret;sg.status='graded';sg.gradedAt=Math.floor(Date.now()/1000);
+      changed=true;
+    }
+  }
+  if(changed)saveState();
+}
+/* per-factor + overall stats from graded signals */
+function memStats(){
+  const fac={},all={n:0,wins:0,sumRet:0};
+  for(const id in STATE.signals){
+    const sg=STATE.signals[id];if(sg.status!=='graded')continue;
+    const win=sg.ret>0;all.n++;all.wins+=win?1:0;all.sumRet+=sg.ret;
+    for(const f of sg.factors){const o=fac[f]||(fac[f]={n:0,wins:0,sumRet:0});
+      o.n++;o.wins+=win?1:0;o.sumRet+=sg.ret;}
+  }
+  return {fac,all};
+}
+/* adaptive confidence 0..1 for a set of factors */
+function confidence(factors){
+  const {fac}=memStats();
+  let acc=0,used=0;
+  for(const f of factors){const o=fac[f];
+    if(o&&o.n>=5){acc+=o.wins/o.n;used++;}else{acc+=0.5;used++;}}
+  let base=used?acc/used:0.5;
+  base+=Math.max(0,(factors.length-1))*0.03; // more confirmations = slightly more trust
+  return Math.max(0,Math.min(1,base));
+}
+/* auto-follow the freshest signal when LIVE + enabled + confident enough */
+function maybeAutoFollow(s){
+  if(!liveTimer||!STATE.settings.autoFollow||!s.markers.length)return;
+  const m=s.markers[s.markers.length-1];
+  // only act on a signal on the most recent (forming/just-closed) bars, once
+  if(m._i<candlesRaw.length-2)return;
+  const id=`${tokenId()}|${curTF}|${m.time}|${m.side}`;
+  if(id===lastAutoId)return;
+  const conf=confidence(m.factors||[]);
+  if(conf*100<STATE.settings.autoConf)return;
+  lastAutoId=id;
+  const have=STATE.positions.find(p=>p.token===tokenId());
+  if(m.side==='long'){
+    if(have&&have.side==='long')return;
+    autoOpen('long',conf);
+  }else{
+    if(have&&have.side==='long'){closePos(have.id,'signal');return;}
+    if(STATE.settings.allowShort&&!(have&&have.side==='short'))autoOpen('short',conf);
+  }
+}
+/* like openPos but flagged auto + confidence-scaled size, no DOM inputs required */
+function autoOpen(side,conf){
+  const px=livePrice();if(!px)return;
+  const have=STATE.positions.find(p=>p.token===tokenId());
+  if(have){if(have.side===side)return;closePos(have.id,'flip');}
+  const slipPx=px*(1+(side==='long'?1:-1)*STATE.settings.slipBps/1e4);
+  const eq=equityNow();
+  const notional=eq*STATE.settings.sizePct/100*(0.5+conf*0.5); // scale 50–100% of base by confidence
+  const qty=notional/slipPx, fee=notional*STATE.settings.feeBps/1e4;
+  STATE.cash += (side==='long'?-(qty*slipPx):(qty*slipPx))-fee;
+  STATE.positions.push({id:'p'+Date.now(),token:tokenId(),sym:tokenSym(),tf:curTF,side,qty,
+    entry:slipPx,sl:null,tp:null,riskUsd:null,feeIn:fee,openT:Math.floor(Date.now()/1000),
+    auto:true,conf,lastPx:px});
+  saveState();
+  setStatus(`AUTO ${side.toUpperCase()} ${tokenSym()} · conf ${(conf*100).toFixed(0)}% · $${fmtBig(notional)}`,false);
+  refreshTradeUI();
+}
+/* called from render() on every (re)draw and live tick */
+function onRender(disp,s,meta){
+  processSignals(disp,s);
+  checkStops();
+  maybeAutoFollow(s);
+  updatePosChip(s);
+  if(document.getElementById('view-paper').classList.contains('on'))renderPaper();
+}
+
+/* ===================================================================
+   UI RENDERERS
+   =================================================================== */
+function money(n){const v=(n<0?'-$':'$')+fmtBig(Math.abs(n));return v;}
+function pct(n){return (n>=0?'+':'')+(n*100).toFixed(1)+'%';}
+function cls(n){return n>0?'up':n<0?'down':'';}
+function uPnl(p){const px=(p.token===tokenId())?livePrice():(p.lastPx||p.entry);
+  return p.side==='long'?(px-p.entry)*p.qty:(p.entry-px)*p.qty;}
+
+function updatePosChip(){
+  const el=document.getElementById('poschip');if(!el)return;
+  const p=STATE.positions.find(x=>x.token===tokenId());
+  if(!p){el.innerHTML='no open position · equity <b>'+money(equityNow())+'</b>';return;}
+  const up=uPnl(p),px=livePrice();
+  el.innerHTML=`<b>${p.side.toUpperCase()}</b> ${p.sym} @ ${fmtPrice(p.entry)} `+
+    `→ ${fmtPrice(px)} · <span class="${cls(up)}">${money(up)}</span>`+
+    (p.sl?` · SL ${fmtPrice(p.sl)}`:'')+(p.tp?` · TP ${fmtPrice(p.tp)}`:'')+
+    `<br>equity <b>${money(equityNow())}</b> · cash ${money(STATE.cash)}`;
+}
+function refreshTradeUI(){updatePosChip();renderAcct();
+  if(document.getElementById('view-paper').classList.contains('on'))renderPaper();}
+
+function renderAcct(){
+  const wrap=document.getElementById('acct-stats');if(!wrap)return;
+  const eq=equityNow(),pnl=eq-STATE.bankroll,ret=pnl/STATE.bankroll;
+  let unreal=0;for(const p of STATE.positions)unreal+=uPnl(p);
+  wrap.innerHTML=`
+    <div class="stat"><div class="k">Equity</div><div class="v">${money(eq)}</div></div>
+    <div class="stat"><div class="k">Total PnL</div><div class="v ${cls(pnl)}">${money(pnl)} <span style="font-size:11px">(${pct(ret)})</span></div></div>
+    <div class="stat"><div class="k">Cash</div><div class="v">${money(STATE.cash)}</div></div>
+    <div class="stat"><div class="k">Open</div><div class="v">${STATE.positions.length} <span style="font-size:11px" class="${cls(unreal)}">${money(unreal)}</span></div></div>`;
+}
+function renderPaper(){
+  renderAcct();
+  // open positions
+  const ow=document.getElementById('open-wrap');
+  if(!STATE.positions.length)ow.innerHTML='<div class="empty">No open positions. Load a token on the CHART tab and hit BUY/SHORT.</div>';
+  else{
+    let h='<table class="tbl"><tr><th>Token</th><th>Side</th><th>Size</th><th>Entry</th><th>Now</th><th>uPnL</th><th>SL/TP</th><th></th></tr>';
+    for(const p of STATE.positions){const up=uPnl(p);const px=(p.token===tokenId())?livePrice():(p.lastPx||p.entry);
+      h+=`<tr><td>${p.sym}${p.auto?' <span style="color:var(--mid)">⚡</span>':''}</td>
+        <td class="${p.side==='long'?'up':'down'}">${p.side.toUpperCase()}</td>
+        <td>${money(p.qty*p.entry)}</td><td>${fmtPrice(p.entry)}</td><td>${fmtPrice(px)}</td>
+        <td class="${cls(up)}">${money(up)}</td>
+        <td>${p.sl?fmtPrice(p.sl):'—'} / ${p.tp?fmtPrice(p.tp):'—'}</td>
+        <td><button class="mini" data-close="${p.id}">CLOSE</button></td></tr>`;}
+    h+='</table>';ow.innerHTML=h;
+  }
+  // recent closed
+  const rw=document.getElementById('recent-wrap');
+  const tr=STATE.trades.slice().reverse().slice(0,15);
+  if(!tr.length)rw.innerHTML='<div class="empty">No closed trades yet.</div>';
+  else{
+    let h='<table class="tbl"><tr><th>Token</th><th>Side</th><th>Entry→Exit</th><th>PnL</th><th>R</th><th>Why</th><th>When</th></tr>';
+    for(const t of tr){h+=`<tr><td>${t.sym}${t.auto?' ⚡':''}</td>
+      <td class="${t.side==='long'?'up':'down'}">${t.side.toUpperCase()}</td>
+      <td>${fmtPrice(t.entry)}→${fmtPrice(t.exit)}</td>
+      <td class="${cls(t.pnl)}">${money(t.pnl)}</td>
+      <td class="${cls(t.R)}">${t.R!=null?t.R.toFixed(2)+'R':'—'}</td>
+      <td style="color:var(--dim)">${t.reason}</td>
+      <td style="color:var(--dim)">${new Date(t.closeT*1000).toLocaleDateString()}</td></tr>`;}
+    h+='</table>';rw.innerHTML=h;
+  }
+}
+function renderJournal(){
+  const w=document.getElementById('journal-wrap');
+  const tr=STATE.trades.slice().reverse();
+  if(!tr.length){w.innerHTML='<div class="empty">Closed trades will appear here. Tag your setups and write what you saw — that\'s how you build the skill.</div>';return;}
+  let h='<table class="tbl"><tr><th>When</th><th>Token</th><th>Side</th><th>PnL</th><th>R</th><th>Tags</th><th>Note</th></tr>';
+  for(const t of tr){h+=`<tr>
+    <td style="color:var(--dim)">${new Date(t.closeT*1000).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</td>
+    <td>${t.sym}${t.auto?' ⚡':''}</td>
+    <td class="${t.side==='long'?'up':'down'}">${t.side.toUpperCase()}</td>
+    <td class="${cls(t.pnl)}">${money(t.pnl)}</td>
+    <td class="${cls(t.R)}">${t.R!=null?t.R.toFixed(2)+'R':'—'}</td>
+    <td><input class="note-in" data-tags="${t.id}" value="${(t.tags||'').replace(/"/g,'&quot;')}" placeholder="breakout, fomo…" style="min-width:90px"/></td>
+    <td><input class="note-in" data-note="${t.id}" value="${(t.note||'').replace(/"/g,'&quot;')}" placeholder="what did you see?"/></td></tr>`;}
+  h+='</table>';w.innerHTML=h;
+}
+let eqChart=null,eqSeries=null;
+function renderStats(){
+  const tr=STATE.trades;
+  const wins=tr.filter(t=>t.pnl>0),losses=tr.filter(t=>t.pnl<0);
+  const gross=wins.reduce((a,t)=>a+t.pnl,0),grossL=Math.abs(losses.reduce((a,t)=>a+t.pnl,0));
+  const pf=grossL>0?gross/grossL:(gross>0?Infinity:0);
+  const exp=tr.length?tr.reduce((a,t)=>a+t.pnl,0)/tr.length:0;
+  const rTrades=tr.filter(t=>t.R!=null);
+  const avgR=rTrades.length?rTrades.reduce((a,t)=>a+t.R,0)/rTrades.length:null;
+  const wr=tr.length?wins.length/tr.length:0;
+  const auto=tr.filter(t=>t.auto).length;
+  document.getElementById('perf-stats').innerHTML=`
+    <div class="stat"><div class="k">Equity</div><div class="v">${money(equityNow())}</div></div>
+    <div class="stat"><div class="k">Trades</div><div class="v">${tr.length} <span style="font-size:11px;color:var(--mid)">${auto}⚡</span></div></div>
+    <div class="stat"><div class="k">Win rate</div><div class="v ${wr>=0.5?'up':''}">${(wr*100).toFixed(0)}%</div></div>
+    <div class="stat"><div class="k">Profit factor</div><div class="v ${pf>=1?'up':'down'}">${pf===Infinity?'∞':pf.toFixed(2)}</div></div>
+    <div class="stat"><div class="k">Expectancy</div><div class="v ${cls(exp)}">${money(exp)}</div></div>
+    <div class="stat"><div class="k">Avg R</div><div class="v ${avgR!=null?cls(avgR):''}">${avgR!=null?avgR.toFixed(2)+'R':'—'}</div></div>`;
+  // equity curve
+  if(window.LightweightCharts){
+    if(!eqChart){
+      eqChart=LightweightCharts.createChart(document.getElementById('equity'),{
+        layout:{background:{color:'transparent'},textColor:'#7b8794',fontFamily:'ui-monospace,monospace'},
+        grid:{vertLines:{color:'#13171f'},horzLines:{color:'#13171f'}},height:200,
+        rightPriceScale:{borderColor:'#1c212b'},timeScale:{borderColor:'#1c212b',timeVisible:false}});
+      eqSeries=eqChart.addAreaSeries({lineColor:'#16ff9e',topColor:'rgba(22,255,158,0.25)',
+        bottomColor:'rgba(22,255,158,0.02)',lineWidth:2,priceLineVisible:false});
+      new ResizeObserver(()=>eqChart.applyOptions({width:document.getElementById('equity').clientWidth})).observe(document.getElementById('equity'));
+    }
+    const sorted=tr.slice().sort((a,b)=>a.closeT-b.closeT);
+    let run=STATE.bankroll;const pts=[{time:(sorted[0]?sorted[0].openT:Math.floor(Date.now()/1000))-1,value:run}];
+    const seen=new Set();
+    for(const t of sorted){run+=t.pnl;let tt=t.closeT;while(seen.has(tt))tt++;seen.add(tt);pts.push({time:tt,value:run});}
+    eqSeries.setData(pts);eqChart.applyOptions({width:document.getElementById('equity').clientWidth});
+    eqChart.timeScale().fitContent();
+  }
+  renderFactors();
+}
+function renderFactors(){
+  const w=document.getElementById('factor-wrap');
+  const {fac}=memStats();
+  const rows=Object.keys(fac).map(k=>({k,...fac[k]})).sort((a,b)=>b.n-a.n);
+  if(!rows.length){w.innerHTML='<div class="empty">Trade more to build a sample. Each factor\'s win rate updates as signals get graded.</div>';return;}
+  let h='<table class="tbl"><tr><th>Signal factor</th><th>Samples</th><th>Win rate</th><th>Avg move</th><th>Edge</th></tr>';
+  for(const r of rows){const wr=r.wins/r.n,avg=r.sumRet/r.n;const edge=wr>=0.55?'strong':wr>=0.45?'mixed':'weak';
+    const ec=wr>=0.55?'up':wr<0.45?'down':'';
+    h+=`<tr><td>${FACTOR_LABEL[r.k]||r.k}</td><td>${r.n}</td>
+      <td class="${ec}">${(wr*100).toFixed(0)}%</td>
+      <td class="${cls(avg)}">${pct(avg)}</td>
+      <td class="${ec}">${r.n<5?'building…':edge}</td></tr>`;}
+  h+='</table>';w.innerHTML=h;
+}
+function refreshAllUI(){renderAcct();renderPaper();renderJournal();renderFactors();updatePosChip();
+  if(document.getElementById('view-stats').classList.contains('on'))renderStats();}
+
+/* ---------- settings form ---------- */
+function loadSettingsForm(){
+  const s=STATE.settings;
+  document.getElementById('s-bankroll').value=STATE.bankroll;
+  document.getElementById('s-size').value=s.sizePct;
+  document.getElementById('s-fee').value=s.feeBps;
+  document.getElementById('s-slip').value=s.slipBps;
+  document.getElementById('s-grade').value=s.gradeBars;
+  document.getElementById('s-conf').value=s.autoConf;
+  document.getElementById('s-autofollow').classList.toggle('on',s.autoFollow);
+  document.getElementById('s-allowshort').classList.toggle('on',s.allowShort);
+  document.getElementById('s-suburl').value=s.sbUrl||'';
+  document.getElementById('s-subkey').value=s.sbKey||'';
+  document.getElementById('s-email').value=s.email||'';
+}
+function saveSettingsForm(){
+  const s=STATE.settings,num=(id,d)=>{const v=parseFloat(document.getElementById(id).value);return isNaN(v)?d:v;};
+  const newBank=num('s-bankroll',STATE.bankroll);
+  s.sizePct=num('s-size',s.sizePct);s.feeBps=num('s-fee',s.feeBps);s.slipBps=num('s-slip',s.slipBps);
+  s.gradeBars=Math.max(1,Math.round(num('s-grade',s.gradeBars)));s.autoConf=num('s-conf',s.autoConf);
+  s.autoFollow=document.getElementById('s-autofollow').classList.contains('on');
+  s.allowShort=document.getElementById('s-allowshort').classList.contains('on');
+  const oUrl=s.sbUrl,oKey=s.sbKey;
+  s.sbUrl=document.getElementById('s-suburl').value.trim();
+  s.sbKey=document.getElementById('s-subkey').value.trim();
+  s.email=document.getElementById('s-email').value.trim();
+  // if no trades yet, allow bankroll change to reset starting capital
+  if(!STATE.trades.length&&!STATE.positions.length){STATE.bankroll=newBank;STATE.cash=newBank;}
+  saveState();
+  if(s.sbUrl!==oUrl||s.sbKey!==oKey)cloudInit();
+  refreshAllUI();setStatus('settings saved',false);
+}
+
+/* ===================================================================
+   TAB SWITCHING + EVENT WIRING
+   =================================================================== */
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab');if(!t)return;const tab=t.dataset.tab;
+  document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.toggle('on',x===t));
+  document.querySelectorAll('.panel-view').forEach(v=>v.classList.toggle('on',v.id==='view-'+tab));
+  if(tab==='paper')renderPaper();
+  else if(tab==='journal')renderJournal();
+  else if(tab==='stats')renderStats();
+  else if(tab==='settings')loadSettingsForm();
+  else if(tab==='chart'){/* charts need a resize nudge after being shown */
+    if(ready){pchart.applyOptions({width:document.getElementById('price').clientWidth});
+      rchart.applyOptions({width:document.getElementById('rsi').clientWidth});}}
+});
+// trade bar
+document.getElementById('t-buy').onclick=()=>openPos('long');
+document.getElementById('t-short').onclick=()=>openPos('short');
+document.getElementById('t-close').onclick=closeCurrent;
+// paper close buttons (delegated)
+document.getElementById('open-wrap').addEventListener('click',e=>{
+  const b=e.target.closest('[data-close]');if(b)closePos(b.dataset.close,'manual');});
+// journal note/tag edits (delegated)
+document.getElementById('journal-wrap').addEventListener('input',e=>{
+  const n=e.target.closest('[data-note]'),g=e.target.closest('[data-tags]');
+  const id=(n&&n.dataset.note)||(g&&g.dataset.tags);if(!id)return;
+  const t=STATE.trades.find(x=>x.id===id);if(!t)return;
+  if(n)t.note=n.value;if(g)t.tags=g.value;saveState();});
+// settings toggles + buttons
+document.getElementById('s-autofollow').onclick=function(){this.classList.toggle('on');};
+document.getElementById('s-allowshort').onclick=function(){this.classList.toggle('on');};
+document.getElementById('s-save').onclick=saveSettingsForm;
+document.getElementById('s-reset').onclick=()=>{
+  if(!confirm('Reset account? This wipes positions, trades, and signal memory (settings & cloud creds kept).'))return;
+  const keep=STATE.settings;const bank=parseFloat(document.getElementById('s-bankroll').value)||10000;
+  STATE=freshState(bank);STATE.settings=keep;saveState();refreshAllUI();loadSettingsForm();setStatus('account reset',false);};
+// export / import
+document.getElementById('s-export').onclick=()=>{
+  const blob=new Blob([JSON.stringify(STATE,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='signal-terminal-'+new Date().toISOString().slice(0,10)+'.json';a.click();};
+document.getElementById('s-import').onclick=()=>document.getElementById('s-file').click();
+document.getElementById('s-file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const o=JSON.parse(r.result);o.settings={...DEF_SETTINGS,...(o.settings||{})};
+    o.positions=o.positions||[];o.trades=o.trades||[];o.signals=o.signals||{};
+    STATE=o;saveState();refreshAllUI();loadSettingsForm();setStatus('imported',false);}
+    catch(err){setStatus('import failed: bad JSON',true);}};
+  r.readAsText(f);};
+// cloud buttons
+document.getElementById('s-magic').onclick=async()=>{
+  saveSettingsForm();cloudInit();
+  if(!sb){setStatus('add a valid Supabase URL + anon key first',true);return;}
+  const email=STATE.settings.email;if(!email){setStatus('enter your email first',true);return;}
+  try{const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});
+    if(error)throw error;setStatus('magic link sent — check '+email,false);}
+  catch(e){setStatus('magic link failed: '+e.message,true);}};
+document.getElementById('s-syncnow').onclick=async()=>{
+  cloudInit();if(!sb){setStatus('configure Supabase first',true);return;}
+  if(!sbUser){setStatus('sign in via magic link first',true);return;}
+  await cloudPull();};
+document.getElementById('s-signout').onclick=async()=>{
+  if(sb){await sb.auth.signOut();sbUser=null;cloudBadge();setStatus('signed out (local data kept)',false);}};
+
+/* ---------- init ---------- */
+cloudInit();
+loadSettingsForm();
+refreshAllUI();
 </script>
 </body>
 </html>
