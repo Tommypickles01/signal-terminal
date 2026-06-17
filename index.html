@@ -4,32 +4,56 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>DEGEN SIGNAL TERMINAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>window.LightweightCharts||document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
-    --bg:#070809;
-    --panel:#0d0f13;
-    --panel2:#11141a;
-    --line:#1c212b;
-    --txt:#e8edf2;
-    --dim:#7b8794;
-    --buy:#16ff9e;
+    --bg:#05070b;
+    --panel:#0a0e15;
+    --panel2:#0f1420;
+    --line:#1a2130;
+    --line2:#28313f;       /* brighter hairline / hover */
+    --txt:#e9eef5;
+    --dim:#727e8f;
+    --buy:#1fe08a;         /* electric green */
     --sell:#ff4d6d;
     --fast:#ffb020;   /* fast EMA - amber, like your yellow line */
     --slow:#dfe6ee;   /* slow EMA - off white */
-    --mid:#5b8dff;    /* fib / mid */
+    --mid:#3aa0ff;    /* fib / mid / info accent */
     --amber:#ffb020;
+    --glow-buy:rgba(31,224,138,.38);
+    --glow-sell:rgba(255,77,109,.34);
+    --display:"Chakra Petch","Arial Black","Helvetica Neue",sans-serif;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
-    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;}
-  body{padding:10px;max-width:2040px;margin:0 auto;}
+    font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-feature-settings:"zero" 1;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  body{padding:14px;max-width:2040px;margin:0 auto;position:relative;min-height:100vh;}
+  /* atmosphere: layered radial glows + base gradient */
+  body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+    background:
+      radial-gradient(900px 520px at 80% -10%,rgba(31,224,138,.10),transparent 60%),
+      radial-gradient(820px 540px at 6% 2%,rgba(58,160,255,.075),transparent 55%),
+      linear-gradient(180deg,#080b12 0%,#05070b 55%,#04060a 100%);}
+  /* fine film grain */
+  body::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.04;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  /* scrollbars + selection */
+  *::-webkit-scrollbar{width:10px;height:10px}
+  *::-webkit-scrollbar-track{background:transparent}
+  *::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  *::-webkit-scrollbar-thumb:hover{background:var(--line2)}
+  ::selection{background:rgba(31,224,138,.30);color:#fff}
   .head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
-  .logo{font-weight:800;font-size:18px;letter-spacing:.5px;
-    font-family:"Arial Black","Helvetica Neue",sans-serif}
-  .logo .b{color:var(--buy)} .logo .s{color:var(--sell)}
+  .logo{font-weight:700;font-size:20px;letter-spacing:1px;
+    font-family:var(--display);text-transform:uppercase}
+  .logo .b{color:var(--buy);text-shadow:0 0 18px var(--glow-buy)}
+  .logo .s{color:var(--sell);text-shadow:0 0 18px var(--glow-sell)}
   .tag{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;
     padding:3px 8px;text-transform:uppercase;letter-spacing:1px}
   .controls{display:flex;gap:8px;flex-wrap:wrap;background:var(--panel);
@@ -250,6 +274,62 @@
   .tp-stats .st .v{font-size:13px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   @media(max-width:1180px){.terminal{grid-template-columns:1fr}
     .sidebar,.tradepanel{position:static;max-height:none}}
+
+  /* ===================================================================
+     DESIGN SYSTEM POLISH  (midnight trading desk)
+     — layered on top; only restyles existing classes
+     =================================================================== */
+  /* card depth: subtle top-light gradient + deep ambient shadow + crisp hairline */
+  .controls,.chartwrap,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.tabs,.poscard,.results{
+    background-image:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0) 60%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 24px 50px -34px rgba(0,0,0,.95);}
+  .cell,.stat,.tp-stats .st{background-image:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));}
+  .cell:hover,.stat:hover{border-color:var(--line2)}
+  /* typography: display font for headings, labels, big numbers + tabular figures */
+  .logo,.tab,.sect h3,.wl-head,.tokbar .tk .nm,.tp-go,.bs-tab,.unit{font-family:var(--display)}
+  .cell .v,.stat .v,.tp-stats .st .v,.tokbar .m .v,.poschip b{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+  /* tabs */
+  .tab{font-weight:600;transition:background .15s,color .15s,box-shadow .15s}
+  .tab:hover{color:var(--txt)}
+  .tabs{background:rgba(10,14,21,.72);backdrop-filter:blur(12px) saturate(1.2)}
+  .tab.on{box-shadow:inset 0 0 0 1px var(--line2)}
+  .tab.on[data-tab="chart"]{color:var(--buy)}
+  /* interactive transitions */
+  .pill,.ind,.tog,.unit,.bs-tab,.quick div,.tp-go,.btn,.mini,.closebtn,.res,.wl{
+    transition:transform .1s ease,background .15s,border-color .15s,color .15s,box-shadow .15s}
+  .pill:hover,.ind:hover,.tog:hover,.unit:hover{border-color:var(--line2);color:var(--txt)}
+  .pill.on{box-shadow:0 6px 20px -10px rgba(58,160,255,.6)}
+  /* primary button glow */
+  .btn{box-shadow:0 10px 26px -14px var(--glow-buy)}
+  .btn:hover{box-shadow:0 0 0 1px var(--buy),0 12px 30px -10px var(--glow-buy);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  /* trade panel emphasis */
+  .bs-tab.buy.on{box-shadow:0 10px 30px -12px var(--glow-buy)}
+  .bs-tab.sell.on{box-shadow:0 10px 30px -12px var(--glow-sell)}
+  .tp-go{font-weight:700;letter-spacing:1.5px}
+  .tp-go.buy{box-shadow:0 12px 32px -12px var(--glow-buy)}
+  .tp-go.sell{box-shadow:0 12px 32px -12px var(--glow-sell)}
+  .tp-go:hover{transform:translateY(-1px);filter:brightness(1.06)}
+  .tp-go:active{transform:translateY(0)}
+  .conv{font-family:"IBM Plex Mono",monospace}
+  .conv b{font-variant-numeric:tabular-nums}
+  /* focus rings */
+  .controls input:focus,.searchbox input:focus,.frm input:focus,.tradebar input:focus,
+  .tp-row input:focus,.tbl input.note-in:focus{
+    outline:none;border-color:var(--mid);box-shadow:0 0 0 3px rgba(58,160,255,.16)}
+  /* watchlist active accent */
+  .wl.active{box-shadow:inset 3px 0 0 var(--buy)}
+  .wl .ic,.tokbar .tk .ic{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  /* drawbar — glassy floating toolbar */
+  .drawbar .tool{backdrop-filter:blur(8px);transition:all .12s;box-shadow:0 6px 18px -10px rgba(0,0,0,.8)}
+  .drawbar .tool.on{box-shadow:0 8px 22px -10px var(--glow-buy)}
+  /* tables: zebra-free, glow on hover handled already; numbers tabular */
+  .tbl td{font-variant-numeric:tabular-nums}
+  /* page-load staggered reveal */
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .head{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+  .tabs{animation:rise .5s cubic-bezier(.2,.7,.2,1) .06s both}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
 <body>
@@ -723,10 +803,10 @@ const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false};
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
   if(ready)return;
-  const common={layout:{background:{color:'transparent'},textColor:'#7b8794',fontFamily:'ui-monospace,monospace'},
-    grid:{vertLines:{color:'#13171f'},horzLines:{color:'#13171f'}},
-    rightPriceScale:{borderColor:'#1c212b'},timeScale:{borderColor:'#1c212b',timeVisible:true,secondsVisible:false},
-    crosshair:{vertLine:{color:'#3a4252'},horzLine:{color:'#3a4252'}}};
+  const common={layout:{background:{color:'transparent'},textColor:'#727e8f',fontFamily:'"IBM Plex Mono",ui-monospace,monospace'},
+    grid:{vertLines:{color:'rgba(40,49,63,0.35)'},horzLines:{color:'rgba(40,49,63,0.35)'}},
+    rightPriceScale:{borderColor:'#1a2130'},timeScale:{borderColor:'#1a2130',timeVisible:true,secondsVisible:false},
+    crosshair:{vertLine:{color:'rgba(58,160,255,0.6)'},horzLine:{color:'rgba(58,160,255,0.6)'}}};
   pchart=LightweightCharts.createChart(document.getElementById('price'),{...common,height:chartH()});
   rchart=LightweightCharts.createChart(document.getElementById('rsi'),{...common,height:130});
   // volume histogram on its own overlay scale (bottom 18% of price pane)
@@ -736,8 +816,8 @@ function initCharts(){
   bbUp=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   bbLo=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   bbMid=pchart.addLineSeries({color:'rgba(91,141,255,0.9)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
-  cs=pchart.addCandlestickSeries({upColor:'#16c98a',downColor:'#ff4d6d',borderVisible:false,
-    wickUpColor:'#16c98a',wickDownColor:'#ff4d6d'});
+  cs=pchart.addCandlestickSeries({upColor:'#1fe08a',downColor:'#ff4d6d',borderVisible:false,
+    wickUpColor:'#1fe08a',wickDownColor:'#ff4d6d'});
   // projection cone (dashed)
   projUp=pchart.addLineSeries({color:'rgba(255,176,32,0.35)',lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false});
   projLo=pchart.addLineSeries({color:'rgba(255,176,32,0.35)',lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false});
@@ -1209,6 +1289,8 @@ function onRender(disp,s,meta){
    UI RENDERERS
    =================================================================== */
 function money(n){const v=(n<0?'-$':'$')+fmtBig(Math.abs(n));return v;}
+function usd2(n){const a=Math.abs(n),s=n<0?'-':'';if(a>=1e6)return s+'$'+fmtBig(a);
+  return s+'$'+a.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});}
 function pct(n){return (n>=0?'+':'')+(n*100).toFixed(1)+'%';}
 function cls(n){return n>0?'up':n<0?'down':'';}
 function uPnl(p){const px=(p.token===tokenId())?livePrice():(p.lastPx||p.entry);
@@ -1355,19 +1437,31 @@ function amtUsd(){
   if(!(a>0))return 0;
   return tradeUnit==='sol' ? a*(solUsd||0) : a;
 }
+/* execution price incl. slippage — must match what spotBuy/spotSell use */
+function execPx(side){
+  const px=livePrice();if(!px)return 0;
+  const slip=(STATE.settings.slipBps||0)/1e4;
+  return side==='buy'?px*(1+slip):px*(1-slip);
+}
 function updateConv(){
   const el=document.getElementById('t-conv');if(!el)return;
-  const usd=amtUsd(),px=livePrice();
-  if(!(usd>0)){el.innerHTML=solUsd?`SOL ◎ ≈ <b>$${fmtBig(solUsd)}</b>`:'';return;}
+  // SOL-denominated trade needs the live SOL/USD rate
+  if(tradeUnit==='sol'&&!(solUsd>0)){el.innerHTML='<b style="color:var(--sell)">SOL price loading…</b>';return;}
+  const usd=amtUsd();
+  if(!(usd>0)){el.innerHTML=solUsd?`SOL ◎ ≈ <b>${usd2(solUsd)}</b>`:'';return;}
+  const side=tradeSide, px=execPx(side);
   const coins=px?usd/px:0, sol=solUsd?usd/solUsd:0;
-  el.innerHTML=`${tradeSide==='buy'?'Buy':'Sell'} ≈ <b>${fmtQty(coins)}</b> ${baseSym()} · `+
-    `$${fmtBig(usd)}${solUsd?` · ◎${sol.toFixed(3)}`:''}`;
+  const fee=usd*(STATE.settings.feeBps||0)/1e4;
+  const net=side==='buy'?usd+fee:usd-fee;   // buy: total cash out · sell: cash received
+  el.innerHTML=`${side==='buy'?'Buy':'Sell'} ≈ <b>${fmtQty(coins)}</b> ${baseSym()} @ ${fmtPrice(px)}`+
+    `<br><span style="opacity:.7">${usd2(usd)}${solUsd?` · ◎${sol.toFixed(3)}`:''} · fee ${usd2(fee)} · ${side==='buy'?'cost':'net'} <b>${usd2(net)}</b></span>`;
 }
 function tradeGo(){ tradeSide==='buy'?spotBuy():spotSell(false); }
 function spotBuy(){
   const px=livePrice();if(!px){setStatus('load a token first',true);return;}
+  if(tradeUnit==='sol'&&!(solUsd>0)){setStatus('SOL price not loaded yet — try again',true);return;}
   const usd=amtUsd();if(!(usd>0)){setStatus('enter an amount first',true);return;}
-  const slipPx=px*(1+STATE.settings.slipBps/1e4);
+  const slipPx=execPx('buy');
   const qty=usd/slipPx, fee=usd*STATE.settings.feeBps/1e4;
   const slPct=parseFloat(document.getElementById('t-sl').value);
   const tpPct=parseFloat(document.getElementById('t-tp').value);
@@ -1397,7 +1491,8 @@ function spotSell(all){
   const id=tokenId();
   const p=STATE.positions.find(x=>x.token===id&&x.side==='long');
   if(!p||p.qty<=0){setStatus('no '+baseSym()+' to sell',true);return;}
-  const slipPx=px*(1-STATE.settings.slipBps/1e4);
+  if(!all&&tradeUnit==='sol'&&!(solUsd>0)){setStatus('SOL price not loaded yet — try again',true);return;}
+  const slipPx=execPx('sell');
   const usd=amtUsd();
   let qty=(!all&&usd>0)?usd/slipPx:p.qty;
   if(qty>=p.qty-1e-12)qty=p.qty;            // cap at holdings
@@ -1548,11 +1643,11 @@ function renderStats(){
   if(window.LightweightCharts){
     if(!eqChart){
       eqChart=LightweightCharts.createChart(document.getElementById('equity'),{
-        layout:{background:{color:'transparent'},textColor:'#7b8794',fontFamily:'ui-monospace,monospace'},
-        grid:{vertLines:{color:'#13171f'},horzLines:{color:'#13171f'}},height:200,
-        rightPriceScale:{borderColor:'#1c212b'},timeScale:{borderColor:'#1c212b',timeVisible:false}});
-      eqSeries=eqChart.addAreaSeries({lineColor:'#16ff9e',topColor:'rgba(22,255,158,0.25)',
-        bottomColor:'rgba(22,255,158,0.02)',lineWidth:2,priceLineVisible:false});
+        layout:{background:{color:'transparent'},textColor:'#727e8f',fontFamily:'"IBM Plex Mono",ui-monospace,monospace'},
+        grid:{vertLines:{color:'rgba(40,49,63,0.35)'},horzLines:{color:'rgba(40,49,63,0.35)'}},height:200,
+        rightPriceScale:{borderColor:'#1a2130'},timeScale:{borderColor:'#1a2130',timeVisible:false}});
+      eqSeries=eqChart.addAreaSeries({lineColor:'#1fe08a',topColor:'rgba(31,224,138,0.25)',
+        bottomColor:'rgba(31,224,138,0.02)',lineWidth:2,priceLineVisible:false});
       new ResizeObserver(()=>eqChart.applyOptions({width:document.getElementById('equity').clientWidth})).observe(document.getElementById('equity'));
     }
     const sorted=tr.slice().sort((a,b)=>a.closeT-b.closeT);
