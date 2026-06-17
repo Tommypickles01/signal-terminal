@@ -186,17 +186,28 @@ function parseInput(){
   v=v.replace(/[?#].*$/,'');
   return {net:NETMAP[chain]||chain,pool:v,chainRaw:chain,fromUrl};
 }
-/* resolve a token mint -> best pool via DexScreener; falls back to treating input as a pool */
+/* pick the highest-liquidity pair, preferring the selected network */
+function pickPair(pairs,net){
+  const liq=p=>(p.liquidity&&p.liquidity.usd)||0;
+  const onNet=pairs.filter(p=>NETMAP[(p.chainId||'').toLowerCase()]===net||(p.chainId||'').toLowerCase()===net);
+  return (onNet.length?onNet:pairs).sort((a,b)=>liq(b)-liq(a))[0];
+}
+/* resolve a token mint OR pool/pair address -> canonical pool address via DexScreener.
+   also fixes case-sensitivity: dexscreener URLs lowercase Solana addrs, GeckoTerminal needs exact case. */
 async function resolvePool(net,addr){
+  // token mint -> its pools
   try{
     const j=await getJSON(`${DS}/tokens/${addr}`);
+    const b=pickPair((j&&j.pairs)||[],net);
+    if(b&&b.pairAddress)return {net:NETMAP[(b.chainId||'').toLowerCase()]||net,pool:b.pairAddress};
+  }catch(e){}
+  // pool/pair address -> recover correct-case pairAddress via search
+  try{
+    const j=await getJSON(`${DS}/search?q=${addr}`);
     const pairs=(j&&j.pairs)||[];
-    if(pairs.length){
-      const liq=p=>(p.liquidity&&p.liquidity.usd)||0;
-      const onNet=pairs.filter(p=>NETMAP[(p.chainId||'').toLowerCase()]===net||(p.chainId||'').toLowerCase()===net);
-      const best=(onNet.length?onNet:pairs).sort((a,b)=>liq(b)-liq(a))[0];
-      if(best&&best.pairAddress)return {net:NETMAP[(best.chainId||'').toLowerCase()]||net,pool:best.pairAddress};
-    }
+    const exact=pairs.filter(p=>(p.pairAddress||'').toLowerCase()===addr.toLowerCase());
+    const b=pickPair(exact.length?exact:pairs,net);
+    if(b&&b.pairAddress)return {net:NETMAP[(b.chainId||'').toLowerCase()]||net,pool:b.pairAddress};
   }catch(e){}
   return {net,pool:addr};
 }
@@ -293,10 +304,10 @@ function setStatus(t,err){const e=document.getElementById('status');e.textConten
 
 /* ---------- run ---------- */
 async function load(){
-  let {net,pool,fromUrl}=parseInput();
+  let {net,pool}=parseInput();
   if(!pool){setStatus('paste a DexScreener link, token mint, or pool address first',true);return;}
   try{
-    if(!fromUrl){setStatus('resolving pool…',false);const r=await resolvePool(net,pool);net=r.net;pool=r.pool;}
+    setStatus('resolving pool…',false);const r=await resolvePool(net,pool);net=r.net;pool=r.pool;
   }catch(e){}
   lastReq={net,pool};
   setStatus('fetching candles…',false);
