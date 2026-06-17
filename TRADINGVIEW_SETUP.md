@@ -19,12 +19,20 @@ You only need to drop in the library files.
 
 ## Step 1 — Request access (one time, free)
 
-1. Go to <https://www.tradingview.com/charting-library/> (or the
-   "Advanced Charts" page) and click **Get the library**.
+1. Go to <https://www.tradingview.com/advanced-charts/> and click
+   **Get Library**. (The old `/charting-library/` URL now 404s.)
 2. Sign in with a TradingView account and submit the short form. It asks for a
-   **GitHub username** — they grant you access to a private repo:
-   `tradingview/charting_library`.
-3. Approval is usually quick (often same day). You'll get a GitHub invite.
+   **GitHub username** — if approved they grant you access to a private repo:
+   `tradingview/charting_library`. (Until access is granted, that repo URL 404s
+   — that's expected.)
+3. You'll get a GitHub invite if approved.
+
+> **Licensing caveat (read this first).** TradingView currently does **not**
+> grant Advanced Charts for personal/hobby/study/testing use, and the license
+> **forbids placing the library in a public repository** or behind a paywall.
+> This repo is public (GitHub Pages), so a personal request may be declined,
+> and committing `charting_library/` here would breach their terms. If that
+> blocks you, see "Alternatives" at the bottom of this file.
 
 ## Step 2 — Get the files into this repo
 
@@ -114,3 +122,33 @@ Lightweight chart as a fallback or remove it).
   Lightweight engine. Porting those onto the TradingView chart is a separate
   task (TradingView custom studies + `chart().createShape()` for markers) — say
   the word if you want them moved over too.
+
+---
+
+## Alternatives (if the Charting Library is blocked)
+
+The Charting Library is the only way to get TradingView's *own* drawing tools,
+but for a public/personal project it's often not granted. Realistic options:
+
+1. **Embed the DexScreener chart directly (easiest, free).** DexScreener exposes
+   an embeddable chart for any pool:
+   `https://dexscreener.com/<chain>/<pairAddress>?embed=1&theme=dark`. Drop it in
+   an `<iframe>` in the CHART tab. You get *their* full toolbar (fib, trend,
+   etc.) for free, but you lose your custom overlays/markers (they live on
+   DexScreener's chart, not yours) and you can't drive trades from clicks on it.
+
+2. **Add drawing tools onto the existing Lightweight chart (full control).**
+   Lightweight Charts has no built-in tools, but trend lines, horizontal lines,
+   and fib retracements can be hand-built on a transparent canvas overlay that
+   tracks the chart's time/price scale. More work, but keeps your signals,
+   markers, projection cone, and click-to-trade intact. (A basic
+   trendline/hline/fib set is very doable.)
+
+3. **Stick with the TradingView free *widget* (not the library).** The
+   `tv.js`/`embed-widget` advanced chart has the real tools but only charts
+   exchange-listed symbols — it **cannot** chart arbitrary Solana pool addresses,
+   so it doesn't fit on-chain memecoins. Not recommended for your use case.
+
+Recommendation: if you want the real tools fast, go with **Option 1**
+(DexScreener iframe). If you want to keep your custom signals + click-to-trade,
+go with **Option 2** (overlay tools on the current chart).
