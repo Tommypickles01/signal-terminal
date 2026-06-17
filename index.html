@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>DEGEN SIGNAL TERMINAL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lightweight-charts/4.1.3/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root{
+    --bg:#070809;
+    --panel:#0d0f13;
+    --panel2:#11141a;
+    --line:#1c212b;
+    --txt:#e8edf2;
+    --dim:#7b8794;
+    --buy:#16ff9e;
+    --sell:#ff4d6d;
+    --fast:#ffb020;   /* fast EMA - amber, like your yellow line */
+    --slow:#dfe6ee;   /* slow EMA - off white */
+    --mid:#5b8dff;    /* fib / mid */
+    --amber:#ffb020;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;}
+  body{padding:12px;max-width:1100px;margin:0 auto;}
+  .head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .logo{font-weight:800;font-size:18px;letter-spacing:.5px;
+    font-family:"Arial Black","Helvetica Neue",sans-serif}
+  .logo .b{color:var(--buy)} .logo .s{color:var(--sell)}
+  .tag{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;
+    padding:3px 8px;text-transform:uppercase;letter-spacing:1px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+  .controls input,.controls select{background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);border-radius:8px;padding:9px 10px;font:inherit;font-size:13px}
+  .controls input{flex:1;min-width:200px}
+  .tfgroup,.chaingroup{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+    border-radius:8px;padding:8px 11px;font-size:12px;cursor:pointer;user-select:none}
+  .pill.on{background:var(--mid);border-color:var(--mid);color:#02060f;font-weight:700}
+  .btn{background:var(--buy);border:none;color:#02160d;font-weight:800;border-radius:8px;
+    padding:0 16px;font:inherit;font-size:13px;cursor:pointer;letter-spacing:.5px}
+  .btn:active{transform:translateY(1px)}
+  .btn.live{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-weight:600}
+  .btn.live.on{background:var(--sell);color:#fff;border-color:var(--sell)}
+  /* readout */
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .cell .k{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .cell .v{font-size:16px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .up{color:var(--buy)} .down{color:var(--sell)}
+  .signalcell{grid-column:span 2}
+  .sig-flat{color:var(--dim)} .sig-long{color:var(--buy)} .sig-short{color:var(--sell)}
+  /* charts */
+  .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:6px;margin-bottom:10px;position:relative}
+  #price{height:380px} #rsi{height:130px}
+  .lbl{position:absolute;top:10px;left:12px;font-size:10px;color:var(--dim);
+    letter-spacing:1px;z-index:3;pointer-events:none}
+  .lgd{position:absolute;top:10px;right:12px;font-size:10px;z-index:3;text-align:right;pointer-events:none;line-height:1.5}
+  .lgd .f{color:var(--fast)} .lgd .sw{color:var(--slow)}
+  .status{font-size:11px;color:var(--dim);min-height:16px;margin:2px 2px 12px}
+  .status.err{color:var(--sell)}
+  .note{font-size:10px;color:var(--dim);line-height:1.6;border-top:1px solid var(--line);
+    padding-top:10px;margin-top:6px}
+  .note b{color:var(--amber)}
+  a{color:var(--mid)}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="logo"><span class="b">SIGNAL</span> // <span class="s">TERMINAL</span></div>
+    <div class="tag">dexscreener feed</div>
+  </div>
+
+  <div class="controls">
+    <input id="addr" placeholder="paste DexScreener link or pool/pair address" />
+    <select id="chain">
+      <option value="solana">Solana</option>
+      <option value="eth">Ethereum</option>
+      <option value="base">Base</option>
+      <option value="bsc">BSC</option>
+      <option value="arbitrum">Arbitrum</option>
+      <option value="polygon_pos">Polygon</option>
+      <option value="avax">Avalanche</option>
+    </select>
+    <div class="tfgroup" id="tfgroup">
+      <div class="pill" data-tf="5m">5m</div>
+      <div class="pill" data-tf="15m">15m</div>
+      <div class="pill on" data-tf="1H">1H</div>
+      <div class="pill" data-tf="4H">4H</div>
+      <div class="pill" data-tf="1D">1D</div>
+    </div>
+    <button class="btn" id="load">LOAD</button>
+    <button class="btn live" id="live">● LIVE</button>
+  </div>
+
+  <div class="strip" id="strip">
+    <div class="cell"><div class="k">Pair</div><div class="v" id="m-pair">—</div></div>
+    <div class="cell"><div class="k">Price</div><div class="v" id="m-price">—</div></div>
+    <div class="cell"><div class="k">24h</div><div class="v" id="m-chg">—</div></div>
+    <div class="cell"><div class="k">RSI 14</div><div class="v" id="m-rsi">—</div></div>
+    <div class="cell signalcell"><div class="k">Live signal</div><div class="v sig-flat" id="m-sig">—</div></div>
+    <div class="cell"><div class="k">Liquidity</div><div class="v" id="m-liq">—</div></div>
+    <div class="cell"><div class="k">Vol 24h</div><div class="v" id="m-vol">—</div></div>
+  </div>
+
+  <div class="status" id="status">Paste a token and hit LOAD. Tip: open the chart on dexscreener.com, copy the page link, paste it here.</div>
+
+  <div class="chartwrap">
+    <div class="lbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
+    <div class="lgd"><span class="f">— EMA9 (fast)</span><br><span class="sw">— EMA21/50 (slow)</span></div>
+    <div id="price"></div>
+  </div>
+  <div class="chartwrap">
+    <div class="lbl">RSI 14 · BUY/SELL DOTS</div>
+    <div id="rsi"></div>
+  </div>
+
+  <div class="note">
+    <b>How signals fire:</b> a green BUY dot prints when momentum confluence flips up (RSI exiting oversold, price reclaiming EMA21, EMA9 crossing up, or a volume-spike green candle) and a red SELL dot prints on the mirror conditions. It needs 2+ confirmations and alternates buy→sell→buy so you don't get spammed. Fib levels auto-draw from the swing high/low in view.<br><br>
+    <b>Heads up — this is not financial advice.</b> Memecoins are extremely high risk; indicators describe momentum, they don't predict rugs, LP pulls, or dev wallets. Size accordingly.<br><br>
+    <b>If the chart stays empty in this preview:</b> Claude's in-chat sandbox can block outside data feeds. Download this file and open it directly, or drop it on Netlify/Vercel — it'll pull live data fine from there.
+  </div>
+
+<script>
+const GT='https://api.geckoterminal.com/api/v2';
+const DS='https://api.dexscreener.com/latest/dex';
+const TF={'5m':{tf:'minute',agg:5},'15m':{tf:'minute',agg:15},'1H':{tf:'hour',agg:1},'4H':{tf:'hour',agg:4},'1D':{tf:'day',agg:1}};
+const NETMAP={solana:'solana',eth:'eth',ethereum:'eth',base:'base',bsc:'bsc',arbitrum:'arbitrum',polygon:'polygon_pos',polygon_pos:'polygon_pos',avax:'avax',avalanche:'avax'};
+let curTF='1H', liveTimer=null, lastReq=null;
+
+/* ---------- indicators ---------- */
+function ema(a,p){const k=2/(p+1),out=Array(a.length).fill(null);let prev;
+  for(let i=0;i<a.length;i++){if(i<p-1)continue;
+    if(i===p-1){let s=0;for(let j=0;j<p;j++)s+=a[j];prev=s/p;out[i]=prev;}
+    else{prev=a[i]*k+prev*(1-k);out[i]=prev;}}return out;}
+function rsi(c,p=14){const out=Array(c.length).fill(null);if(c.length<=p)return out;
+  let g=0,l=0;for(let i=1;i<=p;i++){const d=c[i]-c[i-1];if(d>=0)g+=d;else l-=d;}
+  g/=p;l/=p;out[p]=l===0?100:100-100/(1+g/l);
+  for(let i=p+1;i<c.length;i++){const d=c[i]-c[i-1],gg=d>0?d:0,ll=d<0?-d:0;
+    g=(g*(p-1)+gg)/p;l=(l*(p-1)+ll)/p;out[i]=l===0?100:100-100/(1+g/l);}return out;}
+function fib(candles){let hi=-Infinity,lo=Infinity;
+  for(const c of candles){if(c.high>hi)hi=c.high;if(c.low<lo)lo=c.low;}
+  const r=[0,0.236,0.382,0.5,0.618,0.786,1];
+  return r.map(x=>({r:x,price:lo+(hi-lo)*x}));}
+
+/* ---------- signal engine ---------- */
+function signals(c){
+  const closes=c.map(x=>x.close);
+  const e9=ema(closes,9),e21=ema(closes,21),e50=ema(closes,50),r=rsi(closes,14);
+  const markers=[];let pos='flat',last=-5;
+  const vavg=i=>{let s=0,n=0;for(let j=Math.max(0,i-20);j<i;j++){s+=c[j].volume;n++;}return n?s/n:0;};
+  for(let i=2;i<c.length;i++){
+    if(e21[i]==null||r[i]==null||r[i-1]==null)continue;
+    const av=vavg(i);let buy=0,sell=0;
+    if(r[i-1]<30&&r[i]>=30)buy++;
+    if(closes[i-1]<e21[i-1]&&closes[i]>e21[i])buy++;
+    if(e9[i-1]!=null&&e21[i-1]!=null&&e9[i-1]<=e21[i-1]&&e9[i]>e21[i])buy++;
+    if(c[i].close>c[i].open&&av>0&&c[i].volume>av*1.6)buy++;
+    if(r[i-1]>70&&r[i]<=70)sell++;
+    if(closes[i-1]>e21[i-1]&&closes[i]<e21[i])sell++;
+    if(e9[i-1]!=null&&e9[i-1]>=e21[i-1]&&e9[i]<e21[i])sell++;
+    if(c[i].close<c[i].open&&av>0&&c[i].volume>av*1.6)sell++;
+    if(buy>=2&&pos!=='long'&&i-last>=2){
+      markers.push({time:c[i].time,position:'belowBar',color:'#16ff9e',shape:'circle',text:'B',_i:i,_r:r[i]});
+      pos='long';last=i;
+    }else if(sell>=2&&pos==='long'&&i-last>=2){
+      markers.push({time:c[i].time,position:'aboveBar',color:'#ff4d6d',shape:'circle',text:'S',_i:i,_r:r[i]});
+      pos='flat';last=i;
+    }}
+  return {e9,e21,e50,r,markers,pos};
+}
+
+/* ---------- data ---------- */
+function parseInput(){
+  let v=document.getElementById('addr').value.trim();
+  let chain=document.getElementById('chain').value;
+  if(v.includes('dexscreener.com')){
+    const m=v.split('dexscreener.com/')[1].split(/[?#]/)[0].split('/').filter(Boolean);
+    if(m.length>=2){chain=NETMAP[m[0].toLowerCase()]||m[0].toLowerCase();v=m[1];}
+  }
+  v=v.replace(/[?#].*$/,'');
+  return {net:NETMAP[chain]||chain,pool:v,chainRaw:chain};
+}
+async function getJSON(url){const res=await fetch(url,{headers:{accept:'application/json'}});
+  if(!res.ok)throw new Error(res.status+' '+res.statusText);return res.json();}
+
+async function fetchOHLC(net,pool,tf){
+  const t=TF[tf];
+  const u=`${GT}/networks/${net}/pools/${pool}/ohlcv/${t.tf}?aggregate=${t.agg}&limit=500&currency=usd`;
+  const j=await getJSON(u);
+  const list=j?.data?.attributes?.ohlcv_list||[];
+  const c=list.map(x=>({time:+x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]}))
+    .filter(x=>x.close>0).sort((a,b)=>a.time-b.time);
+  const seen=new Set(),out=[];for(const k of c){if(!seen.has(k.time)){seen.add(k.time);out.push(k);}}
+  return out;
+}
+async function fetchMeta(net,pool){
+  try{const j=await getJSON(`${GT}/networks/${net}/pools/${pool}`);
+    const a=j?.data?.attributes;if(!a)return null;
+    return{name:a.name,price:+a.base_token_price_usd,liq:+(a.reserve_in_usd||0),
+      vol:+(a.volume_usd?.h24||0),chg:+(a.price_change_percentage?.h24||0)};
+  }catch(e){return null;}
+}
+
+/* ---------- charting ---------- */
+let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
+function initCharts(){
+  if(ready)return;
+  const common={layout:{background:{color:'transparent'},textColor:'#7b8794',fontFamily:'ui-monospace,monospace'},
+    grid:{vertLines:{color:'#13171f'},horzLines:{color:'#13171f'}},
+    rightPriceScale:{borderColor:'#1c212b'},timeScale:{borderColor:'#1c212b',timeVisible:true,secondsVisible:false},
+    crosshair:{vertLine:{color:'#3a4252'},horzLine:{color:'#3a4252'}}};
+  pchart=LightweightCharts.createChart(document.getElementById('price'),{...common,height:380});
+  rchart=LightweightCharts.createChart(document.getElementById('rsi'),{...common,height:130});
+  cs=pchart.addCandlestickSeries({upColor:'#16c98a',downColor:'#ff4d6d',borderVisible:false,
+    wickUpColor:'#16c98a',wickDownColor:'#ff4d6d'});
+  e9s=pchart.addLineSeries({color:'#ffb020',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  e21s=pchart.addLineSeries({color:'#dfe6ee',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  e50s=pchart.addLineSeries({color:'#6b7686',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  rs=rchart.addLineSeries({color:'#5b8dff',lineWidth:2,priceLineVisible:false});
+  rs.createPriceLine({price:70,color:'#ff4d6d',lineWidth:1,lineStyle:2,axisLabelVisible:true});
+  rs.createPriceLine({price:30,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
+  rs.createPriceLine({price:50,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
+  pchart.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)rchart.timeScale().setVisibleLogicalRange(r);});
+  rchart.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(r)pchart.timeScale().setVisibleLogicalRange(r);});
+  new ResizeObserver(()=>{pchart.applyOptions({width:document.getElementById('price').clientWidth});
+    rchart.applyOptions({width:document.getElementById('rsi').clientWidth});}).observe(document.getElementById('price'));
+  ready=true;
+}
+function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
+
+function render(c,meta){
+  initCharts();
+  const s=signals(c);
+  cs.setData(c);
+  e9s.setData(lineData(c,s.e9));
+  e21s.setData(lineData(c,s.e21));
+  e50s.setData(lineData(c,s.e50));
+  rs.setData(lineData(c,s.r));
+  // fib
+  fibLines.forEach(l=>cs.removePriceLine(l));fibLines=[];
+  const cols={0:'#5b8dff',0.236:'#3a4252',0.382:'#3a4252',0.5:'#ffb020',0.618:'#ffb020',0.786:'#3a4252',1:'#5b8dff'};
+  for(const f of fib(c)){
+    fibLines.push(cs.createPriceLine({price:f.price,color:cols[f.r]||'#2a3140',lineWidth:1,
+      lineStyle:f.r===0.5||f.r===0.618?0:2,axisLabelVisible:true,title:f.r.toFixed(3)}));
+  }
+  // markers on both panes
+  cs.setMarkers(s.markers.map(m=>({time:m.time,position:m.position,color:m.color,shape:'circle',text:m.text})));
+  rs.setMarkers(s.markers.map(m=>({time:m.time,position:m.position==='belowBar'?'belowBar':'aboveBar',color:m.color,shape:'circle',text:''})));
+  // readouts
+  const last=c[c.length-1],r=s.r[s.r.length-1];
+  const price=meta?.price||last.close;
+  document.getElementById('m-pair').textContent=meta?.name||'pool';
+  document.getElementById('m-price').textContent='$'+fmtPrice(price);
+  const chg=meta?.chg;
+  if(chg!=null&&!isNaN(chg)){const e=document.getElementById('m-chg');
+    e.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';e.className='v '+(chg>=0?'up':'down');}
+  const re=document.getElementById('m-rsi');
+  re.textContent=r!=null?r.toFixed(1):'—';re.className='v '+(r==null?'':r>70?'down':r<30?'up':'');
+  if(meta){document.getElementById('m-liq').textContent='$'+fmtBig(meta.liq);
+    document.getElementById('m-vol').textContent='$'+fmtBig(meta.vol);}
+  const sigEl=document.getElementById('m-sig');
+  const lastMk=s.markers[s.markers.length-1];
+  if(s.pos==='long'){sigEl.textContent='● LONG — holding buy';sigEl.className='v sig-long';}
+  else if(lastMk&&lastMk.text==='S'){sigEl.textContent='○ FLAT — last was sell';sigEl.className='v sig-short';}
+  else{sigEl.textContent='○ FLAT — waiting';sigEl.className='v sig-flat';}
+  setStatus(`loaded ${c.length} candles · ${s.markers.length} signals · ${curTF}`,false);
+}
+function fmtPrice(p){if(!p)return'0';if(p>=1)return p.toFixed(4);
+  const s=p.toExponential(4);return p<0.0001?p.toFixed(10).replace(/0+$/,''):p.toPrecision(4);}
+function fmtBig(n){if(!n)return'0';if(n>=1e9)return(n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toFixed(0);}
+function setStatus(t,err){const e=document.getElementById('status');e.textContent=t;e.className='status'+(err?' err':'');}
+
+/* ---------- run ---------- */
+async function load(){
+  const {net,pool}=parseInput();
+  if(!pool){setStatus('paste a DexScreener link or pool address first',true);return;}
+  lastReq={net,pool};
+  setStatus('fetching candles…',false);
+  try{
+    const [c,meta]=await Promise.all([fetchOHLC(net,pool,curTF),fetchMeta(net,pool)]);
+    if(!c.length){setStatus('no candle data for that pool/timeframe. Make sure it\'s a POOL/PAIR address (the dexscreener page url), not the token mint, and the right chain is selected.',true);return;}
+    render(c,meta);
+  }catch(e){
+    setStatus('fetch failed: '+e.message+'  —  if you\'re in the Claude preview this is likely the sandbox blocking the feed. Download the file or host it on Netlify/Vercel.',true);
+  }
+}
+/* events */
+document.getElementById('load').onclick=load;
+document.getElementById('addr').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+document.getElementById('tfgroup').addEventListener('click',e=>{
+  const p=e.target.closest('.pill');if(!p)return;
+  document.querySelectorAll('#tfgroup .pill').forEach(x=>x.classList.remove('on'));
+  p.classList.add('on');curTF=p.dataset.tf;if(lastReq)load();});
+document.getElementById('live').onclick=function(){
+  this.classList.toggle('on');
+  if(this.classList.contains('on')){liveTimer=setInterval(()=>{if(lastReq)load();},60000);
+    setStatus('live — refreshing every 60s',false);}
+  else{clearInterval(liveTimer);liveTimer=null;}
+};
+</script>
+</body>
+</html>
