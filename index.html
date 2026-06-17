@@ -45,6 +45,12 @@
   .btn:active{transform:translateY(1px)}
   .btn.live{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-weight:600}
   .btn.live.on{background:var(--sell);color:#fff;border-color:var(--sell)}
+  /* indicator toggles */
+  .indrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .indlbl{font-size:9px;color:var(--dim);letter-spacing:1.5px;margin-right:4px}
+  .ind{background:var(--panel2);border:1px solid var(--line);color:var(--dim);border-radius:7px;
+    padding:6px 10px;font-size:11px;cursor:pointer;user-select:none;letter-spacing:.5px}
+  .ind.on{background:var(--panel);border-color:var(--mid);color:var(--mid);font-weight:700}
   /* readout */
   .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}
   .cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
@@ -102,6 +108,15 @@
     <button class="btn live" id="embed">DEX ⧉</button>
   </div>
 
+  <div class="indrow" id="indrow">
+    <span class="indlbl">INDICATORS</span>
+    <div class="ind" data-ind="vol">VOL</div>
+    <div class="ind" data-ind="bb">BOLLINGER</div>
+    <div class="ind on" data-ind="fib">FIB</div>
+    <div class="ind" data-ind="sr">SUPPORT/RES</div>
+    <div class="ind" data-ind="proj">PROJECTION</div>
+  </div>
+
   <div class="strip" id="strip">
     <div class="cell"><div class="k">Pair</div><div class="v" id="m-pair">—</div></div>
     <div class="cell"><div class="k">Price</div><div class="v" id="m-price">—</div></div>
@@ -132,6 +147,7 @@
   <div class="note">
     <b>How signals fire:</b> a green BUY dot prints when momentum confluence flips up (RSI exiting oversold, price reclaiming EMA21, EMA9 crossing up, or a volume-spike green candle) and a red SELL dot prints on the mirror conditions. It needs 2+ confirmations and alternates buy→sell→buy so you don't get spammed. Fib levels auto-draw from the swing high/low in view.<br><br>
     <b>Are the dots real?</b> Yes — they're computed live from actual candle data, not random. They're lagging momentum signals (TA), not predictions. The newest forming candle can repaint until it closes, then its dot locks in. <b>LIVE</b> updates price every 6s + candles every 60s. <b>MCAP</b> rescales the chart to market cap. <b>DEX ⧉</b> swaps in DexScreener's true tick chart.<br><br>
+    <b>Indicator buttons:</b> <b>VOL</b> = volume bars; <b>BOLLINGER</b> = 20-period SMA ±2σ band (volatility squeeze/expansion); <b>FIB</b> = auto Fibonacci off the swing high/low in view; <b>SUPPORT/RES</b> = auto levels clustered from swing pivots (thicker = more touches); <b>PROJECTION</b> = a linear-regression trend extended forward with a widening cone. The projection is a math extrapolation of the current trend, <b>not a prediction</b> — it shows where price goes <i>if</i> the trend holds. Everything recomputes on every live tick and rescales with PRICE/MCAP.<br><br>
     <b>Heads up — this is not financial advice.</b> Memecoins are extremely high risk; indicators describe momentum, they don't predict rugs, LP pulls, or dev wallets. Size accordingly.<br><br>
     <b>If the chart stays empty in this preview:</b> Claude's in-chat sandbox can block outside data feeds. Download this file and open it directly, or drop it on Netlify/Vercel — it'll pull live data fine from there.
   </div>
@@ -157,6 +173,65 @@ function fib(candles){let hi=-Infinity,lo=Infinity;
   for(const c of candles){if(c.high>hi)hi=c.high;if(c.low<lo)lo=c.low;}
   const r=[0,0.236,0.382,0.5,0.618,0.786,1];
   return r.map(x=>({r:x,price:lo+(hi-lo)*x}));}
+/* Bollinger Bands: SMA(p) ± mult*stddev */
+function bollinger(closes,p=20,mult=2){
+  const mid=Array(closes.length).fill(null),up=Array(closes.length).fill(null),lo=Array(closes.length).fill(null);
+  for(let i=p-1;i<closes.length;i++){
+    let s=0;for(let j=i-p+1;j<=i;j++)s+=closes[j];const m=s/p;
+    let v=0;for(let j=i-p+1;j<=i;j++){const d=closes[j]-m;v+=d*d;}
+    const sd=Math.sqrt(v/p);
+    mid[i]=m;up[i]=m+mult*sd;lo[i]=m-mult*sd;
+  }
+  return {mid,up,lo};
+}
+/* auto support/resistance: find swing pivots, cluster nearby ones, rank by touches */
+function srLevels(c,maxLevels=5){
+  if(c.length<10)return [];
+  const L=3,piv=[];
+  for(let i=L;i<c.length-L;i++){
+    let hiP=true,loP=true;
+    for(let j=i-L;j<=i+L;j++){if(c[j].high>c[i].high)hiP=false;if(c[j].low<c[i].low)loP=false;}
+    if(hiP)piv.push(c[i].high);
+    if(loP)piv.push(c[i].low);
+  }
+  if(!piv.length)return [];
+  // cluster pivots within tol% of each other
+  const lastClose=c[c.length-1].close;
+  const tol=lastClose*0.012;
+  piv.sort((a,b)=>a-b);
+  const clusters=[];
+  for(const v of piv){
+    const cl=clusters[clusters.length-1];
+    if(cl&&Math.abs(v-cl.sum/cl.n)<=tol){cl.sum+=v;cl.n++;}
+    else clusters.push({sum:v,n:1});
+  }
+  return clusters.map(cl=>({price:cl.sum/cl.n,touches:cl.n}))
+    .sort((a,b)=>b.touches-a.touches).slice(0,maxLevels);
+}
+/* projection: linear regression on recent closes, extend forward N bars + band */
+function projection(c,lookback=40,fwd=14){
+  const n=Math.min(lookback,c.length);if(n<5)return null;
+  const seg=c.slice(c.length-n);
+  let sx=0,sy=0,sxx=0,sxy=0;
+  for(let i=0;i<n;i++){const y=seg[i].close;sx+=i;sy+=y;sxx+=i*i;sxy+=i*y;}
+  const denom=(n*sxx-sx*sx)||1;
+  const slope=(n*sxy-sx*sy)/denom;
+  const intercept=(sy-slope*sx)/n;
+  // residual stddev for the cone
+  let v=0;for(let i=0;i<n;i++){const fitv=intercept+slope*i;const d=seg[i].close-fitv;v+=d*d;}
+  const sd=Math.sqrt(v/n);
+  const step=seg.length>1?(seg[seg.length-1].time-seg[seg.length-2].time):3600;
+  const lastT=c[c.length-1].time;
+  const mid=[],up=[],lo=[];
+  for(let i=0;i<=fwd;i++){
+    const xi=n-1+i, t=lastT+step*i, val=intercept+slope*xi;
+    const spread=sd*(1+i*0.12);
+    mid.push({time:t,value:val});
+    up.push({time:t,value:val+spread});
+    lo.push({time:t,value:Math.max(val-spread,0)});
+  }
+  return {mid,up,lo,slope};
+}
 
 /* ---------- signal engine ---------- */
 function signals(c){
@@ -250,6 +325,11 @@ async function fetchOHLC(net,pool,tf){
 }
 /* ---------- charting ---------- */
 let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
+/* indicator series */
+let vols,bbMid,bbUp,bbLo,projMid,projUp,projLo;
+let srLines=[];
+/* indicator toggle state */
+const ind={vol:false,bb:false,fib:true,sr:false,proj:false};
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
@@ -260,8 +340,19 @@ function initCharts(){
     crosshair:{vertLine:{color:'#3a4252'},horzLine:{color:'#3a4252'}}};
   pchart=LightweightCharts.createChart(document.getElementById('price'),{...common,height:380});
   rchart=LightweightCharts.createChart(document.getElementById('rsi'),{...common,height:130});
+  // volume histogram on its own overlay scale (bottom 18% of price pane)
+  vols=pchart.addHistogramSeries({priceScaleId:'vol',priceLineVisible:false,lastValueVisible:false});
+  pchart.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0}});
+  // bollinger bands
+  bbUp=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  bbLo=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  bbMid=pchart.addLineSeries({color:'rgba(91,141,255,0.9)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
   cs=pchart.addCandlestickSeries({upColor:'#16c98a',downColor:'#ff4d6d',borderVisible:false,
     wickUpColor:'#16c98a',wickDownColor:'#ff4d6d'});
+  // projection cone (dashed)
+  projUp=pchart.addLineSeries({color:'rgba(255,176,32,0.35)',lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false});
+  projLo=pchart.addLineSeries({color:'rgba(255,176,32,0.35)',lineWidth:1,lineStyle:1,priceLineVisible:false,lastValueVisible:false});
+  projMid=pchart.addLineSeries({color:'#ffb020',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
   e9s=pchart.addLineSeries({color:'#ffb020',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
   e21s=pchart.addLineSeries({color:'#dfe6ee',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   e50s=pchart.addLineSeries({color:'#6b7686',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -290,14 +381,37 @@ function render(c,meta){
   e21s.setData(lineData(disp,s.e21));
   e50s.setData(lineData(disp,s.e50));
   rs.setData(lineData(disp,s.r));
-  document.getElementById('pricelbl').textContent=(k===1?'PRICE':'MARKET CAP')+' · EMA 9/21/50 · AUTO-FIB';
+  const onTags=['EMA 9/21/50'];
+  // volume bars (raw size, colored by candle direction)
+  if(ind.vol){vols.setData(disp.map(x=>({time:x.time,value:x.volume||0,
+    color:x.close>=x.open?'rgba(22,201,138,0.5)':'rgba(255,77,109,0.5)'})));onTags.push('VOL');}
+  else vols.setData([]);
+  // bollinger bands
+  if(ind.bb){const closes=disp.map(x=>x.close),b=bollinger(closes,20,2);
+    bbUp.setData(lineData(disp,b.up));bbMid.setData(lineData(disp,b.mid));bbLo.setData(lineData(disp,b.lo));onTags.push('BB');}
+  else {bbUp.setData([]);bbMid.setData([]);bbLo.setData([]);}
+  // projection (regression cone extended forward)
+  if(ind.proj){const pj=projection(disp,40,14);
+    if(pj){projMid.setData(pj.mid);projUp.setData(pj.up);projLo.setData(pj.lo);onTags.push('PROJ');}
+    else{projMid.setData([]);projUp.setData([]);projLo.setData([]);}}
+  else {projMid.setData([]);projUp.setData([]);projLo.setData([]);}
+  // support / resistance lines
+  srLines.forEach(l=>cs.removePriceLine(l));srLines=[];
+  if(ind.sr){for(const lv of srLevels(disp,5)){
+    srLines.push(cs.createPriceLine({price:lv.price,color:'#7b8794',lineWidth:lv.touches>=3?2:1,
+      lineStyle:0,axisLabelVisible:true,title:'S/R'}));}
+    if(srLevels(disp,5).length)onTags.push('S/R');}
   // fib
   fibLines.forEach(l=>cs.removePriceLine(l));fibLines=[];
-  const cols={0:'#5b8dff',0.236:'#3a4252',0.382:'#3a4252',0.5:'#ffb020',0.618:'#ffb020',0.786:'#3a4252',1:'#5b8dff'};
-  for(const f of fib(disp)){
-    fibLines.push(cs.createPriceLine({price:f.price,color:cols[f.r]||'#2a3140',lineWidth:1,
-      lineStyle:f.r===0.5||f.r===0.618?0:2,axisLabelVisible:true,title:f.r.toFixed(3)}));
+  if(ind.fib){
+    const cols={0:'#5b8dff',0.236:'#3a4252',0.382:'#3a4252',0.5:'#ffb020',0.618:'#ffb020',0.786:'#3a4252',1:'#5b8dff'};
+    for(const f of fib(disp)){
+      fibLines.push(cs.createPriceLine({price:f.price,color:cols[f.r]||'#2a3140',lineWidth:1,
+        lineStyle:f.r===0.5||f.r===0.618?0:2,axisLabelVisible:true,title:f.r.toFixed(3)}));
+    }
+    onTags.push('FIB');
   }
+  document.getElementById('pricelbl').textContent=(k===1?'PRICE':'MARKET CAP')+' · '+onTags.join(' · ');
   // markers on both panes
   cs.setMarkers(s.markers.map(m=>({time:m.time,position:m.position,color:m.color,shape:'circle',text:m.text})));
   rs.setMarkers(s.markers.map(m=>({time:m.time,position:m.position==='belowBar'?'belowBar':'aboveBar',color:m.color,shape:'circle',text:''})));
@@ -384,6 +498,10 @@ document.getElementById('modegroup').addEventListener('click',e=>{
   const p=e.target.closest('.pill');if(!p)return;
   document.querySelectorAll('#modegroup .pill').forEach(x=>x.classList.remove('on'));
   p.classList.add('on');mode=p.dataset.mode;if(candlesRaw.length)render(candlesRaw,metaCur);});
+document.getElementById('indrow').addEventListener('click',e=>{
+  const t=e.target.closest('.ind');if(!t)return;
+  const key=t.dataset.ind;ind[key]=!ind[key];t.classList.toggle('on',ind[key]);
+  if(candlesRaw.length)render(candlesRaw,metaCur);});
 document.getElementById('live').onclick=function(){
   this.classList.toggle('on');
   if(this.classList.contains('on')){
