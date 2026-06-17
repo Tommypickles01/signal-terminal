@@ -1,0 +1,6 @@
+/* Optional cosmetic tweaks for the TradingView Charting Library iframe.
+   Referenced by tv-chart.html via custom_css_url. Safe to leave empty. */
+:root{
+  --tv-color-platform-background:#05070b;
+  --tv-color-pane-background:#070a10;
+}

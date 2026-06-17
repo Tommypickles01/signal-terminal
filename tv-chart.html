@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TV Chart · Signal Terminal</title>
+<style>
+  html,body{margin:0;height:100%;background:#05070b;color:#e9eef5;
+    font-family:"IBM Plex Mono",ui-monospace,monospace;overflow:hidden}
+  #tvchart{position:absolute;inset:0}
+  #msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:24px;line-height:1.7;font-size:13px;color:#727e8f}
+  #msg b{color:#1fe08a}
+  #msg code{color:#3aa0ff;background:#0f1420;border:1px solid #1a2130;border-radius:6px;padding:2px 6px}
+  #msg a{color:#3aa0ff}
+</style>
+
+<!-- ============================================================
+     STEP 2 (after you obtain the library): the line below loads it.
+     Place the unzipped "charting_library" folder next to this file.
+     If the folder is missing this script 404s and the fallback
+     message in #msg explains what to do.
+     ============================================================ -->
+<script src="charting_library/charting_library.standalone.js"></script>
+<script src="tv/datafeed.js"></script>
+</head>
+<body>
+  <div id="tvchart"></div>
+  <div id="msg">
+    <div>
+      <b>TradingView Charting Library not found.</b><br>
+      Drop the unzipped <code>charting_library/</code> folder next to this file,<br>
+      then reload. See <code>TRADINGVIEW_SETUP.md</code> for how to get access.<br><br>
+      This page expects a symbol like <code>tv-chart.html?symbol=solana:POOL&interval=60</code>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var symbol = params.get('symbol') || 'solana:So11111111111111111111111111111111111111112';
+  var interval = params.get('interval') || '60';
+
+  // Charting Library present?  (it defines TradingView.widget)
+  if (!window.TradingView || !window.TradingView.widget) return;   // keep #msg visible
+  document.getElementById('msg').style.display = 'none';
+
+  window.tvWidget = new TradingView.widget({
+    container: 'tvchart',
+    library_path: 'charting_library/',
+    datafeed: GeckoDatafeed({ pollMs: 15000 }),
+    symbol: symbol,
+    interval: interval,
+    locale: 'en',
+    fullscreen: true,
+    autosize: true,
+    theme: 'dark',
+    timezone: 'Etc/UTC',
+    // give the user the full drawing toolbar (fib retracement, trend, etc.)
+    disabled_features: ['header_symbol_search', 'header_compare'],
+    enabled_features: ['side_toolbar_in_fullscreen_mode', 'hide_left_toolbar_by_default'],
+    custom_css_url: 'tv/tv-overrides.css',
+    overrides: {
+      'paneProperties.background': '#070a10',
+      'paneProperties.backgroundType': 'solid',
+      'paneProperties.vertGridProperties.color': 'rgba(40,49,63,0.35)',
+      'paneProperties.horzGridProperties.color': 'rgba(40,49,63,0.35)',
+      'scalesProperties.textColor': '#727e8f',
+      'mainSeriesProperties.candleStyle.upColor': '#1fe08a',
+      'mainSeriesProperties.candleStyle.downColor': '#ff4d6d',
+      'mainSeriesProperties.candleStyle.wickUpColor': '#1fe08a',
+      'mainSeriesProperties.candleStyle.wickDownColor': '#ff4d6d',
+      'mainSeriesProperties.candleStyle.borderUpColor': '#1fe08a',
+      'mainSeriesProperties.candleStyle.borderDownColor': '#ff4d6d'
+    },
+    studies_overrides: {
+      'volume.volume.color.0': 'rgba(255,77,109,0.5)',
+      'volume.volume.color.1': 'rgba(31,224,138,0.5)'
+    },
+    loading_screen: { backgroundColor: '#05070b', foregroundColor: '#1fe08a' }
+  });
+
+  // let the parent terminal switch tokens without reloading the iframe
+  window.addEventListener('message', function (e) {
+    var d = e.data || {};
+    if (d && d.type === 'tv-symbol' && d.symbol && window.tvWidget) {
+      try { window.tvWidget.chart().setSymbol(d.symbol, d.interval || interval); } catch (err) {}
+    }
+  });
+})();
+</script>
+</body>
+</html>
