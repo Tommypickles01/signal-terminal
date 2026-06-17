@@ -93,13 +93,19 @@
       <div class="pill" data-tf="4H">4H</div>
       <div class="pill" data-tf="1D">1D</div>
     </div>
+    <div class="tfgroup" id="modegroup">
+      <div class="pill on" data-mode="price">PRICE</div>
+      <div class="pill" data-mode="mcap">MCAP</div>
+    </div>
     <button class="btn" id="load">LOAD</button>
     <button class="btn live" id="live">● LIVE</button>
+    <button class="btn live" id="embed">DEX ⧉</button>
   </div>
 
   <div class="strip" id="strip">
     <div class="cell"><div class="k">Pair</div><div class="v" id="m-pair">—</div></div>
     <div class="cell"><div class="k">Price</div><div class="v" id="m-price">—</div></div>
+    <div class="cell"><div class="k">MCap</div><div class="v" id="m-mc">—</div></div>
     <div class="cell"><div class="k">24h</div><div class="v" id="m-chg">—</div></div>
     <div class="cell"><div class="k">RSI 14</div><div class="v" id="m-rsi">—</div></div>
     <div class="cell signalcell"><div class="k">Live signal</div><div class="v sig-flat" id="m-sig">—</div></div>
@@ -109,10 +115,14 @@
 
   <div class="status" id="status">Paste a token and hit LOAD. Tip: open the chart on dexscreener.com, copy the page link, paste it here.</div>
 
-  <div class="chartwrap">
-    <div class="lbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
+  <div class="chartwrap" id="pricewrap">
+    <div class="lbl" id="pricelbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
     <div class="lgd"><span class="f">— EMA9 (fast)</span><br><span class="sw">— EMA21/50 (slow)</span></div>
     <div id="price"></div>
+  </div>
+  <div class="chartwrap" id="embedwrap" style="display:none">
+    <div class="lbl">DEXSCREENER · LIVE (tick)</div>
+    <iframe id="dexframe" style="width:100%;height:540px;border:0;border-radius:8px;display:block"></iframe>
   </div>
   <div class="chartwrap">
     <div class="lbl">RSI 14 · BUY/SELL DOTS</div>
@@ -121,6 +131,7 @@
 
   <div class="note">
     <b>How signals fire:</b> a green BUY dot prints when momentum confluence flips up (RSI exiting oversold, price reclaiming EMA21, EMA9 crossing up, or a volume-spike green candle) and a red SELL dot prints on the mirror conditions. It needs 2+ confirmations and alternates buy→sell→buy so you don't get spammed. Fib levels auto-draw from the swing high/low in view.<br><br>
+    <b>Are the dots real?</b> Yes — they're computed live from actual candle data, not random. They're lagging momentum signals (TA), not predictions. The newest forming candle can repaint until it closes, then its dot locks in. <b>LIVE</b> updates price every 6s + candles every 60s. <b>MCAP</b> rescales the chart to market cap. <b>DEX ⧉</b> swaps in DexScreener's true tick chart.<br><br>
     <b>Heads up — this is not financial advice.</b> Memecoins are extremely high risk; indicators describe momentum, they don't predict rugs, LP pulls, or dev wallets. Size accordingly.<br><br>
     <b>If the chart stays empty in this preview:</b> Claude's in-chat sandbox can block outside data feeds. Download this file and open it directly, or drop it on Netlify/Vercel — it'll pull live data fine from there.
   </div>
@@ -178,13 +189,12 @@ function signals(c){
 function parseInput(){
   let v=document.getElementById('addr').value.trim();
   let chain=document.getElementById('chain').value;
-  let fromUrl=false;
   if(v.includes('dexscreener.com')){
     const m=v.split('dexscreener.com/')[1].split(/[?#]/)[0].split('/').filter(Boolean);
-    if(m.length>=2){chain=NETMAP[m[0].toLowerCase()]||m[0].toLowerCase();v=m[1];fromUrl=true;}
+    if(m.length>=2){chain=NETMAP[m[0].toLowerCase()]||m[0].toLowerCase();v=m[1];}
   }
   v=v.replace(/[?#].*$/,'');
-  return {net:NETMAP[chain]||chain,pool:v,chainRaw:chain,fromUrl};
+  return {net:NETMAP[chain]||chain,pool:v,chainRaw:chain};
 }
 /* pick the highest-liquidity pair, preferring the selected network */
 function pickPair(pairs,net){
@@ -192,14 +202,14 @@ function pickPair(pairs,net){
   const onNet=pairs.filter(p=>NETMAP[(p.chainId||'').toLowerCase()]===net||(p.chainId||'').toLowerCase()===net);
   return (onNet.length?onNet:pairs).sort((a,b)=>liq(b)-liq(a))[0];
 }
-/* resolve a token mint OR pool/pair address -> canonical pool address via DexScreener.
+/* fetch the best DexScreener pair object for a token mint OR pool/pair address.
    also fixes case-sensitivity: dexscreener URLs lowercase Solana addrs, GeckoTerminal needs exact case. */
-async function resolvePool(net,addr){
+async function fetchPair(net,addr){
   // token mint -> its pools
   try{
     const j=await getJSON(`${DS}/tokens/${addr}`);
     const b=pickPair((j&&j.pairs)||[],net);
-    if(b&&b.pairAddress)return {net:NETMAP[(b.chainId||'').toLowerCase()]||net,pool:b.pairAddress};
+    if(b&&b.pairAddress)return b;
   }catch(e){}
   // pool/pair address -> recover correct-case pairAddress via search
   try{
@@ -207,9 +217,23 @@ async function resolvePool(net,addr){
     const pairs=(j&&j.pairs)||[];
     const exact=pairs.filter(p=>(p.pairAddress||'').toLowerCase()===addr.toLowerCase());
     const b=pickPair(exact.length?exact:pairs,net);
-    if(b&&b.pairAddress)return {net:NETMAP[(b.chainId||'').toLowerCase()]||net,pool:b.pairAddress};
+    if(b&&b.pairAddress)return b;
   }catch(e){}
-  return {net,pool:addr};
+  return null;
+}
+async function resolvePool(net,addr){
+  const b=await fetchPair(net,addr);
+  if(b)return {net:NETMAP[(b.chainId||'').toLowerCase()]||net,pool:b.pairAddress,pair:b};
+  return {net,pool:addr,pair:null};
+}
+/* normalize a DexScreener pair into our meta + derive circulating supply for MCap view */
+function metaFromPair(p){
+  if(!p)return null;
+  const price=+p.priceUsd||0, mc=+p.marketCap||+p.fdv||0;
+  return {name:((p.baseToken&&p.baseToken.symbol)||'')+' / '+((p.quoteToken&&p.quoteToken.symbol)||''),
+    price, mc, liq:+((p.liquidity&&p.liquidity.usd)||0), vol:+((p.volume&&p.volume.h24)||0),
+    chg:+((p.priceChange&&p.priceChange.h24)||0), url:p.url||'',
+    supply:(price>0&&mc>0)?mc/price:0};
 }
 async function getJSON(url){const res=await fetch(url,{headers:{accept:'application/json'}});
   if(!res.ok)throw new Error(res.status+' '+res.statusText);return res.json();}
@@ -224,16 +248,10 @@ async function fetchOHLC(net,pool,tf){
   const seen=new Set(),out=[];for(const k of c){if(!seen.has(k.time)){seen.add(k.time);out.push(k);}}
   return out;
 }
-async function fetchMeta(net,pool){
-  try{const j=await getJSON(`${GT}/networks/${net}/pools/${pool}`);
-    const a=j?.data?.attributes;if(!a)return null;
-    return{name:a.name,price:+a.base_token_price_usd,liq:+(a.reserve_in_usd||0),
-      vol:+(a.volume_usd?.h24||0),chg:+(a.price_change_percentage?.h24||0)};
-  }catch(e){return null;}
-}
-
 /* ---------- charting ---------- */
 let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
+/* live/view state */
+let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
   if(ready)return;
   const common={layout:{background:{color:'transparent'},textColor:'#7b8794',fontFamily:'ui-monospace,monospace'},
@@ -261,16 +279,20 @@ function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o
 
 function render(c,meta){
   initCharts();
-  const s=signals(c);
-  cs.setData(c);
-  e9s.setData(lineData(c,s.e9));
-  e21s.setData(lineData(c,s.e21));
-  e50s.setData(lineData(c,s.e50));
-  rs.setData(lineData(c,s.r));
+  // MCap view scales every price by circulating supply (RSI/EMA crosses are scale-invariant, so signals are identical)
+  const k=(mode==='mcap'&&supply>0)?supply:1;
+  const disp=k===1?c:c.map(x=>({time:x.time,open:x.open*k,high:x.high*k,low:x.low*k,close:x.close*k,volume:x.volume}));
+  const s=signals(disp);
+  cs.setData(disp);
+  e9s.setData(lineData(disp,s.e9));
+  e21s.setData(lineData(disp,s.e21));
+  e50s.setData(lineData(disp,s.e50));
+  rs.setData(lineData(disp,s.r));
+  document.getElementById('pricelbl').textContent=(k===1?'PRICE':'MARKET CAP')+' · EMA 9/21/50 · AUTO-FIB';
   // fib
   fibLines.forEach(l=>cs.removePriceLine(l));fibLines=[];
   const cols={0:'#5b8dff',0.236:'#3a4252',0.382:'#3a4252',0.5:'#ffb020',0.618:'#ffb020',0.786:'#3a4252',1:'#5b8dff'};
-  for(const f of fib(c)){
+  for(const f of fib(disp)){
     fibLines.push(cs.createPriceLine({price:f.price,color:cols[f.r]||'#2a3140',lineWidth:1,
       lineStyle:f.r===0.5||f.r===0.618?0:2,axisLabelVisible:true,title:f.r.toFixed(3)}));
   }
@@ -282,6 +304,7 @@ function render(c,meta){
   const price=meta?.price||last.close;
   document.getElementById('m-pair').textContent=meta?.name||'pool';
   document.getElementById('m-price').textContent='$'+fmtPrice(price);
+  document.getElementById('m-mc').textContent=meta&&meta.mc?'$'+fmtBig(meta.mc):(supply?'$'+fmtBig(price*supply):'—');
   const chg=meta?.chg;
   if(chg!=null&&!isNaN(chg)){const e=document.getElementById('m-chg');
     e.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';e.className='v '+(chg>=0?'up':'down');}
@@ -306,18 +329,47 @@ function setStatus(t,err){const e=document.getElementById('status');e.textConten
 async function load(){
   let {net,pool}=parseInput();
   if(!pool){setStatus('paste a DexScreener link, token mint, or pool address first',true);return;}
+  let pair=null;
   try{
-    setStatus('resolving pool…',false);const r=await resolvePool(net,pool);net=r.net;pool=r.pool;
+    setStatus('resolving pool…',false);const r=await resolvePool(net,pool);net=r.net;pool=r.pool;pair=r.pair;
   }catch(e){}
   lastReq={net,pool};
   setStatus('fetching candles…',false);
   try{
-    const [c,meta]=await Promise.all([fetchOHLC(net,pool,curTF),fetchMeta(net,pool)]);
+    const c=await fetchOHLC(net,pool,curTF);
     if(!c.length){setStatus('no candle data for that pool/timeframe. Make sure it\'s a POOL/PAIR address (the dexscreener page url), not the token mint, and the right chain is selected.',true);return;}
-    render(c,meta);
+    const meta=metaFromPair(pair);
+    candlesRaw=c; metaCur=meta; supply=(meta&&meta.supply)||0;
+    dsUrl=(meta&&meta.url)||'';
+    syncEmbed();
+    render(candlesRaw,metaCur);
   }catch(e){
     setStatus('fetch failed: '+e.message+'  —  if you\'re in the Claude preview this is likely the sandbox blocking the feed. Download the file or host it on Netlify/Vercel.',true);
   }
+}
+/* live: lightweight price tick from DexScreener (updates last candle in place) */
+async function liveTick(){
+  if(!lastReq||!candlesRaw.length)return;
+  try{
+    const p=await fetchPair(lastReq.net,lastReq.pool);
+    const m=metaFromPair(p); if(!m||!m.price)return;
+    metaCur=m; if(m.supply)supply=m.supply;
+    const last=candlesRaw[candlesRaw.length-1];
+    last.close=m.price;
+    if(m.price>last.high)last.high=m.price;
+    if(m.price<last.low)last.low=m.price;
+    render(candlesRaw,metaCur);
+    setStatus(`live · last update ${new Date().toLocaleTimeString()} · ${curTF}`,false);
+  }catch(e){}
+}
+/* heavier refresh: pull fresh candles so new bars roll in */
+async function refreshCandles(){
+  if(!lastReq)return;
+  try{const c=await fetchOHLC(lastReq.net,lastReq.pool,curTF);if(c.length){candlesRaw=c;render(candlesRaw,metaCur);}}catch(e){}
+}
+function syncEmbed(){
+  const on=document.getElementById('embedwrap').style.display!=='none';
+  if(on&&dsUrl)document.getElementById('dexframe').src=dsUrl.split('?')[0]+'?embed=1&theme=dark&trades=0&info=0';
 }
 /* events */
 document.getElementById('load').onclick=load;
@@ -326,11 +378,27 @@ document.getElementById('tfgroup').addEventListener('click',e=>{
   const p=e.target.closest('.pill');if(!p)return;
   document.querySelectorAll('#tfgroup .pill').forEach(x=>x.classList.remove('on'));
   p.classList.add('on');curTF=p.dataset.tf;if(lastReq)load();});
+document.getElementById('modegroup').addEventListener('click',e=>{
+  const p=e.target.closest('.pill');if(!p)return;
+  document.querySelectorAll('#modegroup .pill').forEach(x=>x.classList.remove('on'));
+  p.classList.add('on');mode=p.dataset.mode;if(candlesRaw.length)render(candlesRaw,metaCur);});
 document.getElementById('live').onclick=function(){
   this.classList.toggle('on');
-  if(this.classList.contains('on')){liveTimer=setInterval(()=>{if(lastReq)load();},60000);
-    setStatus('live — refreshing every 60s',false);}
-  else{clearInterval(liveTimer);liveTimer=null;}
+  if(this.classList.contains('on')){
+    if(!lastReq){this.classList.remove('on');setStatus('load a token first',true);return;}
+    liveTick();
+    liveTimer=setInterval(liveTick,6000);
+    candleTimer=setInterval(refreshCandles,60000);
+    setStatus('live — price every 6s, candles every 60s',false);
+  } else {clearInterval(liveTimer);clearInterval(candleTimer);liveTimer=candleTimer=null;}
+};
+document.getElementById('embed').onclick=function(){
+  if(!dsUrl){setStatus('load a token first to embed its DexScreener chart',true);return;}
+  this.classList.toggle('on');
+  const ew=document.getElementById('embedwrap'),pw=document.getElementById('pricewrap');
+  const on=this.classList.contains('on');
+  ew.style.display=on?'':'none'; pw.style.display=on?'none':'';
+  syncEmbed();
 };
 </script>
 </body>
