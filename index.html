@@ -281,6 +281,8 @@ function render(c,meta){
   initCharts();
   // MCap view scales every price by circulating supply (RSI/EMA crosses are scale-invariant, so signals are identical)
   const k=(mode==='mcap'&&supply>0)?supply:1;
+  // axis labels: abbreviated $ (12.43M) in MCap mode, fine-grained price otherwise
+  pchart.applyOptions({localization:{priceFormatter:v=>k===1?fmtPrice(v):fmtBig(v)}});
   const disp=k===1?c:c.map(x=>({time:x.time,open:x.open*k,high:x.high*k,low:x.low*k,close:x.close*k,volume:x.volume}));
   const s=signals(disp);
   cs.setData(disp);
