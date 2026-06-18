@@ -882,7 +882,22 @@ function twoPole(c,filterLen=20){
     if(tp[i]==null||tpp[i]==null||tp[i-1]==null||tpp[i-1]==null)continue;
     if(tp[i]>tpp[i]&&tp[i-1]<=tpp[i-1]&&tp[i]<0)buys.add(i);
     if(tp[i]<tpp[i]&&tp[i-1]>=tpp[i-1]&&tp[i]>0)sells.add(i);}
-  return {tp,tpp,buys,sells};
+  // trailing stop levels: support below a buy / resistance above a sell, offset
+  // by the average range (SMA(high-low,100)); cleared when price breaks them.
+  const area=smaArr(c.map(x=>x.high-x.low),100);
+  const buyLine=Array(n).fill(null),sellLine=Array(n).fill(null);
+  for(let i=0;i<n;i++){
+    const a=area[i],prevB=i>0?buyLine[i-1]:null,prevS=i>0?sellLine[i-1]:null;
+    // buy_line: set on buy, cleared on sell or when low breaks below it, else carried
+    if(buys.has(i)&&i>=1&&a!=null)buyLine[i]=c[i-1].low-a;
+    else if(sells.has(i))buyLine[i]=null;
+    else buyLine[i]=(prevB!=null&&c[i].low<prevB)?null:prevB;
+    // sell_line: set on sell, cleared on buy or when high breaks above it, else carried
+    if(sells.has(i)&&i>=1&&a!=null)sellLine[i]=c[i-1].high+a;
+    else if(buys.has(i))sellLine[i]=null;
+    else sellLine[i]=(prevS!=null&&c[i].high>prevS)?null:prevS;
+  }
+  return {tp,tpp,buys,sells,buyLine,sellLine};
 }
 
 /* ---------- signal engine ---------- */
@@ -1022,8 +1037,8 @@ let srLines=[];
 let wtchart,wt1s,wt2s,wtArea;
 /* macd pane */
 let mchart,macdLine,macdSig,macdHist;
-/* two-pole oscillator pane */
-let tpochart,tpoLine,tpoSig;
+/* two-pole oscillator pane + its price-chart stop levels */
+let tpochart,tpoLine,tpoSig,tpoBuyLine,tpoSellLine;
 /* indicator toggle state */
 const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false};
 /* live/view state */
@@ -1055,6 +1070,9 @@ function initCharts(){
   e21s=pchart.addLineSeries({color:'#dfe6ee',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   e50s=pchart.addLineSeries({color:'#6b7686',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   vwapS=pchart.addLineSeries({color:'#b388ff',lineWidth:2,lineStyle:0,priceLineVisible:false,lastValueVisible:false});
+  // two-pole oscillator trailing stop levels (dashed, on the price pane)
+  tpoBuyLine=pchart.addLineSeries({color:'#22d3ee',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+  tpoSellLine=pchart.addLineSeries({color:'#ff4dd2',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
   rs=rchart.addLineSeries({color:'#5b8dff',lineWidth:2,priceLineVisible:false});
   rs.createPriceLine({price:70,color:'#ff4d6d',lineWidth:1,lineStyle:2,axisLabelVisible:true});
   rs.createPriceLine({price:30,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
@@ -1094,6 +1112,8 @@ function initCharts(){
   ready=true;
 }
 function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
+/* like lineData but emits whitespace ({time} only) for nulls so the line BREAKS there */
+function gapData(c,arr){return c.map((x,i)=>arr[i]==null?{time:x.time}:{time:x.time,value:arr[i]});}
 
 function render(c,meta){
   initCharts();
@@ -1145,8 +1165,9 @@ function render(c,meta){
     tpo.buys.forEach(i=>dots.push({time:disp[i].time,position:'belowBar',color:'#22d3ee',shape:'circle',text:''}));
     tpo.sells.forEach(i=>dots.push({time:disp[i].time,position:'aboveBar',color:'#ff4dd2',shape:'circle',text:''}));
     tpoLine.setMarkers(dots.sort((a,b)=>a.time-b.time));
+    tpoBuyLine.setData(gapData(disp,tpo.buyLine));tpoSellLine.setData(gapData(disp,tpo.sellLine));
     onTags.push('2POLE');}
-  else {tpoLine.setData([]);tpoSig.setData([]);tpoLine.setMarkers([]);}
+  else {tpoLine.setData([]);tpoSig.setData([]);tpoLine.setMarkers([]);tpoBuyLine.setData([]);tpoSellLine.setData([]);}
   // support / resistance lines
   srLines.forEach(l=>cs.removePriceLine(l));srLines=[];
   if(ind.sr){for(const lv of srLevels(disp,5)){
