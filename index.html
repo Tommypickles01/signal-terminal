@@ -104,7 +104,7 @@
   @keyframes sigflashS{0%{box-shadow:0 0 0 0 rgba(255,77,109,0)}12%{box-shadow:0 0 20px 5px var(--glow-sell);background:rgba(255,77,109,.16)}100%{box-shadow:0 0 0 0 rgba(255,77,109,0);background:transparent}}
   .sig-flash-buy{animation:sigflashB 1s ease-out 5;border-radius:7px;padding:1px 5px;margin:-1px -5px}
   .sig-flash-sell{animation:sigflashS 1s ease-out 5;border-radius:7px;padding:1px 5px;margin:-1px -5px}
-  /* live signal glow dots on the price chart (pulse ~2min, then dull) */
+  /* live signal glow dots on the price chart (pulse ~5min, then dull) */
   #sigglow{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
   .sgd{position:absolute;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);
     transition:opacity .8s ease,box-shadow .8s ease}
@@ -1857,11 +1857,11 @@ function positionGlows(){
   const dx=pr.left-lr.left,dy=pr.top-lr.top,now=Date.now(),ts=pchart.timeScale();
   activeGlows=activeGlows.filter(g=>{
     const age=now-g.born;
-    if(age>140000){g.el.remove();return false;}                 // retire ~20s after dulling
+    if(age>360000){g.el.remove();return false;}                 // retire ~1min after dulling
     const x=ts.timeToCoordinate(g.time),y=cs.priceToCoordinate(g.price);
     if(x==null||y==null){g.el.style.display='none';return true;}
     g.el.style.display='';g.el.style.left=(dx+x)+'px';g.el.style.top=(dy+y)+'px';
-    if(age>120000)g.el.classList.add('dull');                    // dull after 2 minutes
+    if(age>300000)g.el.classList.add('dull');                    // dull after 5 minutes
     return true;
   });
 }
