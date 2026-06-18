@@ -102,7 +102,7 @@
   /* charts */
   .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:6px;margin-bottom:10px;position:relative}
-  #price{height:380px} #rsi{height:130px} #wt{height:150px}
+  #price{height:clamp(360px,50vh,560px)} #rsi{height:118px} #wt{height:130px}
   .lbl{position:absolute;top:10px;left:12px;font-size:10px;color:var(--dim);
     letter-spacing:1px;z-index:3;pointer-events:none}
   .lgd{position:absolute;top:10px;right:12px;font-size:10px;z-index:3;text-align:right;pointer-events:none;line-height:1.5}
@@ -240,7 +240,6 @@
   /* chart control row */
   .chartctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
   .chartctl .sep{width:1px;height:22px;background:var(--line);margin:0 2px}
-  #price{height:620px}
   /* ===== trade panel ===== */
   .bs-tabs{display:flex;gap:6px;margin-bottom:12px}
   .bs-tab{flex:1;text-align:center;padding:11px;border-radius:10px;cursor:pointer;font-weight:800;
@@ -339,6 +338,42 @@
     box-shadow:0 0 8px var(--glow-buy);animation:pulse 2.4s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important}}
+  /* ===================================================================
+     APPLE-GRADE REFINEMENT  — softer radii, refined hairlines, glass depth
+     layered last so it wins; restyles existing classes only
+     =================================================================== */
+  :root{--r:16px;--r-sm:11px;--hair:rgba(255,255,255,.06);--hair-hi:rgba(255,255,255,.10)}
+  /* softer, more generous corners on every surface */
+  .controls,.chartwrap,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.poscard,.results,
+  .embedwrap,.nav-bal{border-radius:var(--r)}
+  .cell,.stat,.pill,.ind,.btn,.bs-tab,.unit,.tp-go,.tp-stats .st,.wl,.tog,.mini,.res{border-radius:var(--r-sm)}
+  /* hairline borders: low-contrast, precise — replaces hard 1px lines */
+  .controls,.chartwrap,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.poscard,.results,.cell,.stat{
+    border-color:var(--hair)}
+  /* refined depth: tighter top highlight + soft, wide ambient shadow */
+  .controls,.chartwrap,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.poscard,.results{
+    background-image:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 42%);
+    box-shadow:inset 0 1px 0 var(--hair-hi),0 1px 2px rgba(0,0,0,.4),0 28px 60px -42px rgba(0,0,0,.9)}
+  /* the chart itself: glassy inner well so candles feel inset, not flat */
+  .chartwrap{backdrop-filter:blur(6px) saturate(1.08)}
+  #price,#rsi,#wt{border-radius:12px;overflow:hidden;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)}
+  /* crisper section titles, tighter tracking (Apple-like restraint) */
+  .sect h3,.wl-head{letter-spacing:.3px}
+  .cell .k,.stat .k{letter-spacing:.6px;opacity:.85}
+  /* hover lift on the primary cards for a tactile, high-end feel */
+  .cell,.stat{transition:transform .18s cubic-bezier(.2,.7,.2,1),border-color .18s,box-shadow .18s}
+  .cell:hover,.stat:hover{transform:translateY(-1px);
+    box-shadow:0 10px 28px -18px rgba(0,0,0,.9),inset 0 1px 0 var(--hair-hi)}
+  /* refine the top nav + status bar glass to match */
+  .topnav{height:56px;background:linear-gradient(180deg,rgba(12,16,24,.72),rgba(8,11,17,.62));
+    backdrop-filter:blur(22px) saturate(1.4);border-bottom:1px solid var(--hair)}
+  .statusbar{background:linear-gradient(180deg,rgba(10,14,21,.62),rgba(6,9,14,.78));
+    backdrop-filter:blur(22px) saturate(1.4);border-top:1px solid var(--hair)}
+  .nav-bal{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01));
+    border-color:var(--hair)}
+  /* buttons/pills: smoother, less neon, more refined */
+  .pill,.ind,.tog,.unit,.bs-tab,.btn,.tp-go{transition:transform .16s cubic-bezier(.2,.7,.2,1),background .16s,border-color .16s,color .16s,box-shadow .16s}
 </style>
 </head>
 <body>
@@ -819,7 +854,6 @@ async function fetchOHLC(net,pool,tf){
 let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
 /* cached markers/times for live redraw */
 let lastSigMarks=[],lastTimes=[];
-function chartH(){return Math.max(440,Math.round(window.innerHeight-360));}
 /* indicator series */
 let vols,bbMid,bbUp,bbLo,projMid,projUp,projLo;
 let srLines=[];
@@ -835,11 +869,13 @@ function initCharts(){
     grid:{vertLines:{color:'rgba(40,49,63,0.35)'},horzLines:{color:'rgba(40,49,63,0.35)'}},
     rightPriceScale:{borderColor:'#1a2130'},timeScale:{borderColor:'#1a2130',timeVisible:true,secondsVisible:false},
     crosshair:{vertLine:{color:'rgba(58,160,255,0.6)'},horzLine:{color:'rgba(58,160,255,0.6)'}}};
-  pchart=LightweightCharts.createChart(document.getElementById('price'),{...common,height:chartH()});
-  rchart=LightweightCharts.createChart(document.getElementById('rsi'),{...common,height:130});
+  pchart=LightweightCharts.createChart(document.getElementById('price'),{...common,autosize:true});
+  rchart=LightweightCharts.createChart(document.getElementById('rsi'),{...common,autosize:true});
+  // keep candles in the upper band; leave headroom small + room for the volume strip below
+  pchart.priceScale('right').applyOptions({scaleMargins:{top:0.08,bottom:0.22}});
   // volume histogram on its own overlay scale (bottom 18% of price pane)
   vols=pchart.addHistogramSeries({priceScaleId:'vol',priceLineVisible:false,lastValueVisible:false});
-  pchart.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0}});
+  pchart.priceScale('vol').applyOptions({scaleMargins:{top:0.84,bottom:0}});
   // bollinger bands
   bbUp=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   bbLo=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -858,7 +894,7 @@ function initCharts(){
   rs.createPriceLine({price:30,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
   rs.createPriceLine({price:50,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
   // wavetrend pane
-  wtchart=LightweightCharts.createChart(document.getElementById('wt'),{...common,height:150});
+  wtchart=LightweightCharts.createChart(document.getElementById('wt'),{...common,autosize:true});
   wtArea=wtchart.addAreaSeries({lineColor:'#22d3ee',topColor:'rgba(34,211,238,0.28)',bottomColor:'rgba(34,211,238,0.02)',
     lineWidth:2,priceLineVisible:false,lastValueVisible:false});
   wt2s=wtchart.addLineSeries({color:'#5b8dff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -871,11 +907,7 @@ function initCharts(){
   charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
     if(!r||syncing)return;syncing=true;
     charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
-  new ResizeObserver(()=>{pchart.applyOptions({width:document.getElementById('price').clientWidth});
-    rchart.applyOptions({width:document.getElementById('rsi').clientWidth});
-    wtchart.applyOptions({width:document.getElementById('wt').clientWidth});}).observe(document.getElementById('price'));
-  // keep price pane tall on viewport resize
-  window.addEventListener('resize',()=>{if(ready)pchart.applyOptions({height:chartH()});});
+  // autosize:true makes each chart track its container's size automatically
   ready=true;
 }
 function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
