@@ -240,9 +240,15 @@
     border:1px solid transparent}
   .wl:hover{background:var(--panel2);border-color:var(--line)}
   .wl.active{background:var(--panel2);border-color:var(--mid)}
-  .wl .ic{width:22px;height:22px;border-radius:6px;flex:0 0 auto;
+  .wl .ic{width:22px;height:22px;border-radius:6px;flex:0 0 auto;overflow:hidden;
     background:linear-gradient(135deg,#2b3550,#0f1622);display:flex;align-items:center;justify-content:center;
     font-size:10px;font-weight:800;color:var(--mid)}
+  /* token icons pulled from DexScreener/pump.fun image metadata */
+  .wl .ic img,.tokbar .tk .ic img{width:100%;height:100%;object-fit:cover;display:block}
+  .res .ic{width:22px;height:22px;border-radius:6px;flex:0 0 auto;overflow:hidden;
+    background:linear-gradient(135deg,#2b3550,#0f1622);display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:800;color:var(--mid)}
+  .res .ic img{width:100%;height:100%;object-fit:cover;display:block}
   .wl .nm{min-width:0}
   .wl .nm .s{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wl .nm .c{font-size:9px;color:var(--dim)}
@@ -256,7 +262,7 @@
   .tokbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);
     border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px}
   .tokbar .tk{display:flex;align-items:center;gap:9px}
-  .tokbar .tk .ic{width:30px;height:30px;border-radius:8px;
+  .tokbar .tk .ic{width:30px;height:30px;border-radius:8px;overflow:hidden;
     background:linear-gradient(135deg,#2b3550,#0f1622);display:flex;align-items:center;justify-content:center;
     font-size:12px;font-weight:800;color:var(--mid)}
   .tokbar .tk .nm{font-size:14px;font-weight:800;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -323,6 +329,17 @@
     .controls input{min-width:0}
     .pill,.ind,.tog,.unit,.quick div,.bs-tab{padding-top:10px;padding-bottom:10px}
     .chartwrap{padding:4px}
+    /* dense rows: one swipeable strip instead of wrapping into tall stacks */
+    .indrow{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .indrow::-webkit-scrollbar{display:none}
+    .indrow>*{flex:0 0 auto}
+    .safety{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .safety::-webkit-scrollbar{display:none}
+    .safety>*{flex:0 0 auto}
+    .chartctl input{min-width:130px}
+    .tokbar{gap:9px 12px}
+    .tokbar .tk .nm{max-width:130px}
+    .strip{grid-template-columns:repeat(auto-fit,minmax(96px,1fr))}
   }
 
   /* ===================================================================
@@ -704,6 +721,8 @@ const GT='https://api.geckoterminal.com/api/v2';
 const DS='https://api.dexscreener.com/latest/dex';
 const TF={'5m':{tf:'minute',agg:5},'15m':{tf:'minute',agg:15},'1H':{tf:'hour',agg:1},'4H':{tf:'hour',agg:4},'1D':{tf:'day',agg:1}};
 const NETMAP={solana:'solana',eth:'eth',ethereum:'eth',base:'base',bsc:'bsc',arbitrum:'arbitrum',polygon:'polygon_pos',polygon_pos:'polygon_pos',avax:'avax',avalanche:'avax'};
+/* GeckoTerminal network -> DexScreener chainId (for the direct /pairs lookup) */
+const DSCHAIN={solana:'solana',eth:'ethereum',base:'base',bsc:'bsc',arbitrum:'arbitrum',polygon_pos:'polygon',avax:'avalanche'};
 let curTF='1H', liveTimer=null, lastReq=null;
 
 /* ---------- indicators ---------- */
@@ -1086,6 +1105,13 @@ function pickPair(pairs,net){
 /* fetch the best DexScreener pair object for a token mint OR pool/pair address.
    also fixes case-sensitivity: dexscreener URLs lowercase Solana addrs, GeckoTerminal needs exact case. */
 async function fetchPair(net,addr){
+  // fastest path: direct pair lookup by chain + pair address (1 call, covers watchlist + live tick)
+  const dsc=DSCHAIN[net];
+  if(dsc){try{
+    const j=await getJSON(`${DS}/pairs/${dsc}/${addr}`);
+    const b=pickPair((j&&j.pairs)||[],net);
+    if(b&&b.pairAddress)return b;
+  }catch(e){}}
   // token mint -> its pools
   try{
     const j=await getJSON(`${DS}/tokens/${addr}`);
@@ -1117,6 +1143,7 @@ function metaFromPair(p){
     chg:+((p.priceChange&&p.priceChange.h24)||0),
     chg1:+((p.priceChange&&p.priceChange.h1)||0), url:p.url||'',
     supply:(price>0&&mc>0)?mc/price:0,
+    img:(p.info&&p.info.imageUrl)||'',
     // safety fields
     fdv:+p.fdv||+p.marketCap||0, createdAt:+p.pairCreatedAt||0,
     buys:+tx.buys||0, sells:+tx.sells||0,
@@ -1369,7 +1396,8 @@ function render(c,meta){
   const last=c[c.length-1],r=s.r[s.r.length-1];
   const price=meta?.price||last.close;
   document.getElementById('m-pair').textContent=meta?.name||'pool';
-  {const ic=document.getElementById('tok-ic');if(ic)ic.textContent=(meta&&meta.name?meta.name.trim().slice(0,1).toUpperCase():'◎');}
+  {const ic=document.getElementById('tok-ic');if(ic){const lt=(meta&&meta.name?meta.name.trim().slice(0,1).toUpperCase():'◎');
+    ic.innerHTML=(meta&&meta.img)?`<img src="${meta.img}" alt="" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${lt}'">`:lt;}}
   document.getElementById('m-price').textContent='$'+fmtPrice(price);
   document.getElementById('m-mc').textContent=meta&&meta.mc?'$'+fmtBig(meta.mc):(supply?'$'+fmtBig(price*supply):'—');
   const chg=meta?.chg;
@@ -1524,6 +1552,7 @@ function loadState(){
   return freshState();
 }
 function saveState(){
+  _memVer++;   // invalidate the graded-signal stats cache
   try{localStorage.setItem(SKEY,JSON.stringify(STATE));}catch(e){}
   if(sb&&sbUser){clearTimeout(pushTimer);pushTimer=setTimeout(cloudPush,1500);}
 }
@@ -1701,8 +1730,10 @@ function processSignals(disp,s){
   }
   if(changed)saveState();
 }
-/* per-factor + overall stats from graded signals */
+/* per-factor + overall stats from graded signals (cached; invalidated on saveState) */
+let _memVer=0,_memCacheVer=-1,_memCache=null;
 function memStats(){
+  if(_memCache&&_memCacheVer===_memVer)return _memCache;
   const fac={},all={n:0,wins:0,sumRet:0};
   for(const id in STATE.signals){
     const sg=STATE.signals[id];if(sg.status!=='graded')continue;
@@ -1710,7 +1741,7 @@ function memStats(){
     for(const f of sg.factors){const o=fac[f]||(fac[f]={n:0,wins:0,sumRet:0});
       o.n++;o.wins+=win?1:0;o.sumRet+=sg.ret;}
   }
-  return {fac,all};
+  _memCache={fac,all};_memCacheVer=_memVer;return _memCache;
 }
 /* adaptive confidence 0..1 for a set of factors */
 function confidence(factors){
@@ -1965,7 +1996,9 @@ async function doSearch(q){
       const sym=(p.baseToken&&p.baseToken.symbol)||'?';
       const ch=+((p.priceChange&&p.priceChange.h24)||0);
       const liq=(p.liquidity&&p.liquidity.usd)||0;
+      const img=(p.info&&p.info.imageUrl)||'',lt=(sym[0]||'?').toUpperCase();
       return `<div class="res" data-net="${net}" data-pool="${p.pairAddress}">`+
+        `<div class="ic">${img?`<img src="${img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${lt}'">`:lt}</div>`+
         `<span class="sym">${sym}</span>`+
         `<span class="meta">${p.chainId} · $${fmtBig(liq)}</span>`+
         `<span class="px">$${fmtPrice(+p.priceUsd||0)}</span>`+
@@ -1981,33 +2014,57 @@ function addFavorite(){
   if(!lastReq){setStatus('load a token first, then save it',true);return;}
   const id=tokenId();
   if((STATE.favorites||[]).some(f=>f.token===id)){renderWatchlist();return;}
-  STATE.favorites.push({token:id,sym:tokenSym(),net:lastReq.net,pool:lastReq.pool});
+  STATE.favorites.push({token:id,sym:tokenSym(),net:lastReq.net,pool:lastReq.pool,img:(metaCur&&metaCur.img)||''});
   saveState();renderWatchlist();updateFavStar();
 }
 function removeFavorite(id){STATE.favorites=(STATE.favorites||[]).filter(f=>f.token!==id);
   saveState();renderWatchlist();updateFavStar();}
 function markWatchlistActive(){const cur=tokenId();
   document.querySelectorAll('#watchlist .wl').forEach(el=>el.classList.toggle('active',el.dataset.load===cur));}
+function favLetter(f){const c=(f.sym||'?').trim()[0]||'?';return /[a-z0-9]/i.test(c)?c.toUpperCase():'?';}
+function iconHTML(f){
+  return f.img
+    ? `<img src="${f.img}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.textContent='${favLetter(f)}'">`
+    : favLetter(f);
+}
 function renderWatchlist(){
   const wrap=document.getElementById('watchlist');if(!wrap)return;
   const favs=STATE.favorites||[],cur=tokenId();
   if(!favs.length){wrap.innerHTML='<div class="wl-empty">No saved coins yet. Load a token and tap ＋ (or the ★) to pin it here.</div>';return;}
   wrap.innerHTML=favs.map(f=>`<div class="wl${f.token===cur?' active':''}" data-load="${f.token}" data-net="${f.net}" data-pool="${f.pool}">`+
-    `<div class="ic">${((f.sym||'?').trim()[0]||'?').toUpperCase()}</div>`+
+    `<div class="ic" id="wi-${cssId(f.token)}">${iconHTML(f)}</div>`+
     `<div class="nm"><div class="s">${(f.sym||f.token).split(' / ')[0]}</div></div>`+
     `<div class="pr" id="wp-${cssId(f.token)}"><div class="p">…</div></div>`+
     `<div class="x" data-rm="${f.token}" title="remove">✕</div></div>`).join('');
   refreshWatchlistPrices();
 }
+/* one batched DexScreener call per chain (up to 30 pairs each) — prices + icons */
 async function refreshWatchlistPrices(){
-  for(const f of (STATE.favorites||[])){
-    try{const p=await fetchPair(f.net,f.pool);const m=metaFromPair(p);
-      const el=document.getElementById('wp-'+cssId(f.token));if(!el||!m)continue;
-      const ch=m.chg||0;
-      el.innerHTML=`<div class="p">$${fmtPrice(m.price)}</div>`+
-        `<div class="ch ${ch>=0?'up':'down'}">${(ch>=0?'+':'')+ch.toFixed(1)}%</div>`;
-    }catch(e){}
-  }
+  const favs=STATE.favorites||[];if(!favs.length)return;
+  const byChain={};
+  for(const f of favs){const dsc=DSCHAIN[f.net]||f.net;(byChain[dsc]=byChain[dsc]||[]).push(f);}
+  let changed=false;
+  await Promise.all(Object.entries(byChain).map(async([dsc,list])=>{
+    for(let i=0;i<list.length;i+=30){
+      const chunk=list.slice(i,i+30);
+      try{
+        const j=await getJSON(`${DS}/pairs/${dsc}/${chunk.map(f=>f.pool).join(',')}`);
+        const map={};for(const p of ((j&&j.pairs)||[]))map[(p.pairAddress||'').toLowerCase()]=p;
+        for(const f of chunk){
+          const p=map[(f.pool||'').toLowerCase()];const m=p&&metaFromPair(p);if(!m)continue;
+          if(m.img&&f.img!==m.img){f.img=m.img;changed=true;}
+          if(m.name&&m.name!==' / '&&f.sym!==m.name){f.sym=m.name;changed=true;}
+          const ic=document.getElementById('wi-'+cssId(f.token));
+          if(ic&&m.img)ic.innerHTML=iconHTML(f);
+          const el=document.getElementById('wp-'+cssId(f.token));
+          if(el){const ch=m.chg||0;
+            el.innerHTML=`<div class="p">$${fmtPrice(m.price)}</div>`+
+              `<div class="ch ${ch>=0?'up':'down'}">${(ch>=0?'+':'')+ch.toFixed(1)}%</div>`;}
+        }
+      }catch(e){}
+    }
+  }));
+  if(changed)saveState();
 }
 
 /* ---------- spot trade panel (USD / SOL, no leverage) ---------- */
