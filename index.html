@@ -431,6 +431,7 @@
           <div class="tool" data-tool="trend" title="Trend line (click 2 points)">╱</div>
           <div class="tool" data-tool="hline" title="Horizontal line (click 1 point)">─</div>
           <div class="tool" data-tool="fib" title="Fib retracement (click high then low)">≣</div>
+          <div class="tool" data-tool="undo" title="Undo last drawing (Ctrl+Z)">↶</div>
           <div class="tool clr" data-tool="clear" title="Clear all drawings">⌫</div>
           <div class="tool rst" id="chart-reset" title="Reset / fit chart to data">⟲</div>
         </div>
@@ -791,6 +792,8 @@ async function fetchOHLC(net,pool,tf){
 let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
 /* drawing tools + cached markers for live redraw */
 let drawTool=null,drawPts=[],drawings=[],lastSigMarks=[],lastTimes=[];
+/* live drawing preview (shown between first and second click) */
+let previewSeries=null,previewPLs=[];
 function chartH(){return Math.max(440,Math.round(window.innerHeight-360));}
 /* indicator series */
 let vols,bbMid,bbUp,bbLo,projMid,projUp,projLo;
@@ -850,6 +853,7 @@ function initCharts(){
   window.addEventListener('resize',()=>{if(ready)pchart.applyOptions({height:chartH()});});
   // drawing tools: click to place trend lines / horizontal lines / fib levels
   pchart.subscribeClick(onChartClick);
+  pchart.subscribeCrosshairMove(onChartHover);
   ready=true;
 }
 function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
@@ -1512,17 +1516,42 @@ function spotSell(all){
 }
 
 /* ---------- chart drawing tools ---------- */
+const FIB_COLS={0:'#5b8dff',0.236:'#7b8794',0.382:'#7b8794',0.5:'#e6b450',0.618:'#16c98a',0.786:'#7b8794',1:'#5b8dff'};
+const FIB_LV=[0,0.236,0.382,0.5,0.618,0.786,1];
 function setTool(t){
-  drawTool=(drawTool===t)?null:t;drawPts=[];
+  drawTool=(drawTool===t)?null:t;drawPts=[];clearPreview();
   document.querySelectorAll('#drawbar .tool').forEach(el=>el.classList.toggle('on',el.dataset.tool&&el.dataset.tool===drawTool));
   if(ready)pchart.applyOptions({handleScroll:!drawTool,handleScale:!drawTool});
-  setStatus(drawTool?`drawing: ${drawTool} — click on the chart`:'drawing tool off',false);
+  const hint={trend:'click 2 points',hline:'click 1 point',fib:'click high then low'}[drawTool];
+  setStatus(drawTool?`drawing: ${drawTool} — ${hint} (Esc to cancel, Ctrl+Z to undo)`:'drawing tool off',false);
 }
 function snapTime(x,t){
   if(t)return t;
   const ct=ready?pchart.timeScale().coordinateToTime(x):null;
   if(ct)return ct;
   return candlesRaw.length?candlesRaw[candlesRaw.length-1].time:Math.floor(Date.now()/1000);
+}
+function clearPreview(){
+  if(previewSeries){try{pchart.removeSeries(previewSeries);}catch(e){}previewSeries=null;}
+  previewPLs.forEach(r=>{try{cs.removePriceLine(r);}catch(e){}});previewPLs=[];
+}
+// live preview between first and second click
+function onChartHover(param){
+  if(!drawTool||drawPts.length!==1||!param||!param.point){return;}
+  const price=cs.coordinateToPrice(param.point.y);if(price==null)return;
+  const time=snapTime(param.point.x,param.time);
+  const a=drawPts[0];
+  clearPreview();
+  if(drawTool==='trend'){
+    previewSeries=pchart.addLineSeries({color:'rgba(34,211,238,0.6)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+    const pts=[{time:a.time,value:a.price},{time,value:price}].sort((x,y)=>x.time-y.time);
+    if(pts[0].time===pts[1].time)pts[1].time=pts[1].time+60;
+    previewSeries.setData(pts);
+  }else if(drawTool==='fib'){
+    const hi=Math.max(a.price,price),lo=Math.min(a.price,price);
+    previewPLs.push(cs.createPriceLine({price:hi,color:'rgba(91,141,255,0.6)',lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''}));
+    previewPLs.push(cs.createPriceLine({price:lo,color:'rgba(91,141,255,0.6)',lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''}));
+  }
 }
 function onChartClick(param){
   if(!drawTool||!param||!param.point)return;
@@ -1534,7 +1563,7 @@ function onChartClick(param){
   }
   drawPts.push({time,price});
   if(drawPts.length<2)return;
-  const a=drawPts[0],b=drawPts[1];drawPts=[];
+  const a=drawPts[0],b=drawPts[1];drawPts=[];clearPreview();
   if(drawTool==='trend'){
     const ls=pchart.addLineSeries({color:'#22d3ee',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
     const pts=[{time:a.time,value:a.price},{time:b.time,value:b.price}].sort((x,y)=>x.time-y.time);
@@ -1542,20 +1571,27 @@ function onChartClick(param){
     ls.setData(pts);drawings.push({kind:'series',refs:[ls]});
   }else if(drawTool==='fib'){
     const hi=Math.max(a.price,b.price),lo=Math.min(a.price,b.price),d=hi-lo;
-    const cols={0:'#5b8dff',0.236:'#7b8794',0.382:'#7b8794',0.5:'#e6b450',0.618:'#16c98a',0.786:'#7b8794',1:'#5b8dff'};
     const refs=[];
-    for(const L of [0,0.236,0.382,0.5,0.618,0.786,1]){
-      refs.push(cs.createPriceLine({price:hi-d*L,color:cols[L]||'#7b8794',lineWidth:1,
+    for(const L of FIB_LV){
+      refs.push(cs.createPriceLine({price:hi-d*L,color:FIB_COLS[L]||'#7b8794',lineWidth:1,
         lineStyle:(L===0.5||L===0.618)?0:2,axisLabelVisible:true,title:'fib '+L}));}
     drawings.push({kind:'pl',refs});
   }
+  setStatus(`${drawTool} placed — keep clicking to add more, or pick another tool`,false);
+}
+function undoDrawing(){
+  const d=drawings.pop();
+  if(!d){setStatus('nothing to undo',false);return;}
+  if(d.kind==='pl')d.refs.forEach(r=>{try{cs.removePriceLine(r);}catch(e){}});
+  else d.refs.forEach(r=>{try{pchart.removeSeries(r);}catch(e){}});
+  setStatus('last drawing removed',false);
 }
 function clearDrawings(){
   for(const d of drawings){
     if(d.kind==='pl')d.refs.forEach(r=>{try{cs.removePriceLine(r);}catch(e){}});
     else d.refs.forEach(r=>{try{pchart.removeSeries(r);}catch(e){}});
   }
-  drawings=[];drawPts=[];setStatus('drawings cleared',false);
+  drawings=[];drawPts=[];clearPreview();setStatus('drawings cleared',false);
 }
 function resetChart(){
   if(!ready)return;
@@ -1740,7 +1776,13 @@ document.getElementById('drawbar').addEventListener('click',e=>{
   const t=e.target.closest('.tool');if(!t)return;
   if(t.id==='chart-reset'){resetChart();return;}
   if(t.dataset.tool==='clear'){clearDrawings();return;}
+  if(t.dataset.tool==='undo'){undoDrawing();return;}
   setTool(t.dataset.tool);});
+// keyboard: Esc cancels the active tool, Ctrl+Z undoes the last drawing
+document.addEventListener('keydown',e=>{
+  const typing=/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'');
+  if(e.key==='Escape'&&drawTool){setTool(drawTool);return;}
+  if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&!typing){e.preventDefault();undoDrawing();}});
 // favorite star
 document.getElementById('tok-fav').onclick=()=>{
   if(!lastReq){setStatus('load a token first, then ★ to save it',true);return;}
