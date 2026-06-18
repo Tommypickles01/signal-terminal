@@ -120,7 +120,7 @@
   /* charts */
   .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:6px;margin-bottom:10px;position:relative}
-  #price{height:clamp(380px,58vh,760px)} #rsi{height:118px} #wt{height:130px} #macd{height:130px}
+  #price{height:clamp(380px,58vh,760px)} #rsi{height:118px} #wt{height:130px} #macd{height:130px} #tpo{height:140px}
   .lbl{position:absolute;top:10px;left:12px;font-size:10px;color:var(--dim);
     letter-spacing:1px;z-index:3;pointer-events:none}
   .lgd{position:absolute;top:10px;right:12px;font-size:10px;z-index:3;text-align:right;pointer-events:none;line-height:1.5}
@@ -305,7 +305,7 @@
     .terminal{grid-template-columns:1fr;gap:10px}
     .sidebar,.tradepanel{grid-column:auto;position:static;max-height:none}
     #price{height:clamp(300px,46vh,460px)}
-    #rsi{height:96px} #wt{height:104px} #macd{height:104px}
+    #rsi{height:96px} #wt{height:104px} #macd{height:104px} #tpo{height:110px}
     .topnav{gap:10px;padding:0 10px;height:50px}
     .nav-stat{display:none}            /* hide ticker stats, keep balance */
     .controls input{min-width:0}
@@ -511,6 +511,7 @@
         <div class="ind" data-ind="wt">WAVETREND</div>
         <div class="ind" data-ind="vwap">VWAP</div>
         <div class="ind" data-ind="macd">MACD</div>
+        <div class="ind" data-ind="tpo">2-POLE</div>
       </div>
 
       <div class="status" id="status">Search a token or paste a DexScreener link / pool address, then hit LOAD.</div>
@@ -535,6 +536,10 @@
       <div class="chartwrap" id="macdwrap" style="display:none">
         <div class="lbl">MACD · 12 / 26 / 9</div>
         <div id="macd"></div>
+      </div>
+      <div class="chartwrap" id="tpowrap" style="display:none">
+        <div class="lbl">TWO-POLE OSCILLATOR · BIGBELUGA · CROSS DOTS</div>
+        <div id="tpo"></div>
       </div>
     </div>
 
@@ -840,6 +845,46 @@ function rsiDivergence(c,r,lb=60,L=2){
   return {bull,bear};
 }
 
+/* simple moving average / population stdev over an array (null-aware) */
+function smaArr(a,p){const out=Array(a.length).fill(null);
+  for(let i=p-1;i<a.length;i++){let s=0,ok=true;
+    for(let j=i-p+1;j<=i;j++){if(a[j]==null){ok=false;break;}s+=a[j];}
+    if(ok)out[i]=s/p;}return out;}
+function stdevArr(a,p){const out=Array(a.length).fill(null);
+  for(let i=p-1;i<a.length;i++){let s=0,ok=true;
+    for(let j=i-p+1;j<=i;j++){if(a[j]==null){ok=false;break;}s+=a[j];}
+    if(!ok)continue;const m=s/p;let v=0;
+    for(let j=i-p+1;j<=i;j++){const d=a[j]-m;v+=d*d;}
+    out[i]=Math.sqrt(v/p);}return out;}
+/* Two-Pole Oscillator (BigBeluga). z-score of price detrended by SMA(25),
+   smoothed by a two-pole (cascaded EMA) filter; signals on a cross of the
+   line vs its value 4 bars ago while beyond the zero line. */
+function twoPole(c,filterLen=20){
+  const n=c.length, src=c.map(x=>x.close);
+  const sma=smaArr(src,25);
+  const dev=src.map((v,i)=>sma[i]==null?null:v-sma[i]);   // source - sma
+  const sma1=smaArr(dev,25);
+  const stdv=stdevArr(dev,25);
+  const z=src.map((v,i)=>(sma[i]==null||sma1[i]==null||stdv[i]==null||stdv[i]===0)
+    ?null:(v-sma[i]-sma1[i])/stdv[i]);
+  // two-pole filter = EMA of EMA (alpha = 2/(len+1))
+  const alpha=2/(filterLen+1), tp=Array(n).fill(null);
+  let p1=null,p2=null;
+  for(let i=0;i<n;i++){const v=z[i];
+    if(v==null){tp[i]=p2;continue;}
+    p1=(p1==null)?v:(1-alpha)*p1+alpha*v;
+    p2=(p2==null)?p1:(1-alpha)*p2+alpha*p1;
+    tp[i]=p2;}
+  const tpp=Array(n).fill(null);
+  for(let i=4;i<n;i++)tpp[i]=tp[i-4];
+  const buys=new Set(),sells=new Set();
+  for(let i=1;i<n;i++){
+    if(tp[i]==null||tpp[i]==null||tp[i-1]==null||tpp[i-1]==null)continue;
+    if(tp[i]>tpp[i]&&tp[i-1]<=tpp[i-1]&&tp[i]<0)buys.add(i);
+    if(tp[i]<tpp[i]&&tp[i-1]>=tpp[i-1]&&tp[i]>0)sells.add(i);}
+  return {tp,tpp,buys,sells};
+}
+
 /* ---------- signal engine ---------- */
 function signals(c){
   const closes=c.map(x=>x.close);
@@ -977,8 +1022,10 @@ let srLines=[];
 let wtchart,wt1s,wt2s,wtArea;
 /* macd pane */
 let mchart,macdLine,macdSig,macdHist;
+/* two-pole oscillator pane */
+let tpochart,tpoLine,tpoSig;
 /* indicator toggle state */
-const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false};
+const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false};
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
@@ -1028,15 +1075,21 @@ function initCharts(){
   macdLine=mchart.addLineSeries({color:'#3aa0ff',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
   macdSig=mchart.addLineSeries({color:'#ffb020',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   macdLine.createPriceLine({price:0,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
+  // two-pole oscillator pane (starts hidden, fixed height)
+  tpochart=LightweightCharts.createChart(document.getElementById('tpo'),{...common,height:140});
+  tpoSig=tpochart.addLineSeries({color:'#ff4dd2',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  tpoLine=tpochart.addLineSeries({color:'#22d3ee',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  tpoLine.createPriceLine({price:0,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
   // sync all panes' visible range
-  const charts=[pchart,rchart,wtchart,mchart];let syncing=false;
+  const charts=[pchart,rchart,wtchart,mchart,tpochart];let syncing=false;
   charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
     if(!r||syncing)return;syncing=true;
     charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
   // price & rsi use autosize; wt + macd are fixed-height (start hidden) so keep their width in sync
   new ResizeObserver(()=>{const pw=document.getElementById('price').clientWidth;
     if(pw&&document.getElementById('wtwrap').style.display!=='none')wtchart.applyOptions({width:pw});
-    if(pw&&document.getElementById('macdwrap').style.display!=='none')mchart.applyOptions({width:pw});})
+    if(pw&&document.getElementById('macdwrap').style.display!=='none')mchart.applyOptions({width:pw});
+    if(pw&&document.getElementById('tpowrap').style.display!=='none')tpochart.applyOptions({width:pw});})
     .observe(document.getElementById('price'));
   ready=true;
 }
@@ -1085,6 +1138,15 @@ function render(c,meta){
     macdHist.setData(disp.map((x,i)=>md.hist[i]==null?null:{time:x.time,value:md.hist[i],
       color:md.hist[i]>=0?'rgba(22,201,138,0.55)':'rgba(255,77,109,0.55)'}).filter(Boolean));}
   else {macdLine.setData([]);macdSig.setData([]);macdHist.setData([]);}
+  // two-pole oscillator (BigBeluga)
+  if(ind.tpo){const tpo=twoPole(disp,20);
+    tpoSig.setData(lineData(disp,tpo.tpp));tpoLine.setData(lineData(disp,tpo.tp));
+    const dots=[];
+    tpo.buys.forEach(i=>dots.push({time:disp[i].time,position:'belowBar',color:'#22d3ee',shape:'circle',text:''}));
+    tpo.sells.forEach(i=>dots.push({time:disp[i].time,position:'aboveBar',color:'#ff4dd2',shape:'circle',text:''}));
+    tpoLine.setMarkers(dots.sort((a,b)=>a.time-b.time));
+    onTags.push('2POLE');}
+  else {tpoLine.setData([]);tpoSig.setData([]);tpoLine.setMarkers([]);}
   // support / resistance lines
   srLines.forEach(l=>cs.removePriceLine(l));srLines=[];
   if(ind.sr){for(const lv of srLevels(disp,5)){
@@ -1213,6 +1275,9 @@ document.getElementById('indrow').addEventListener('click',e=>{
   if(key==='macd'){document.getElementById('macdwrap').style.display=ind.macd?'':'none';
     if(ind.macd&&mchart){mchart.applyOptions({width:document.getElementById('macd').clientWidth});
       mchart.timeScale().setVisibleLogicalRange(pchart.timeScale().getVisibleLogicalRange());}}
+  if(key==='tpo'){document.getElementById('tpowrap').style.display=ind.tpo?'':'none';
+    if(ind.tpo&&tpochart){tpochart.applyOptions({width:document.getElementById('tpo').clientWidth});
+      tpochart.timeScale().setVisibleLogicalRange(pchart.timeScale().getVisibleLogicalRange());}}
   if(candlesRaw.length)render(candlesRaw,metaCur);});
 document.getElementById('live').onclick=function(){
   this.classList.toggle('on');
