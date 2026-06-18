@@ -894,7 +894,8 @@ function initCharts(){
   rs.createPriceLine({price:30,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
   rs.createPriceLine({price:50,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
   // wavetrend pane
-  wtchart=LightweightCharts.createChart(document.getElementById('wt'),{...common,autosize:true});
+  // wt pane starts hidden (display:none), so autosize can't measure it — size it explicitly
+  wtchart=LightweightCharts.createChart(document.getElementById('wt'),{...common,height:130});
   wtArea=wtchart.addAreaSeries({lineColor:'#22d3ee',topColor:'rgba(34,211,238,0.28)',bottomColor:'rgba(34,211,238,0.02)',
     lineWidth:2,priceLineVisible:false,lastValueVisible:false});
   wt2s=wtchart.addLineSeries({color:'#5b8dff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -907,7 +908,10 @@ function initCharts(){
   charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
     if(!r||syncing)return;syncing=true;
     charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
-  // autosize:true makes each chart track its container's size automatically
+  // price & rsi use autosize; wt is fixed-height (starts hidden) so keep its width in sync
+  new ResizeObserver(()=>{const w=document.getElementById('wt').clientWidth;
+    if(w&&document.getElementById('wtwrap').style.display!=='none')wtchart.applyOptions({width:w});})
+    .observe(document.getElementById('price'));
   ready=true;
 }
 function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
