@@ -33,7 +33,7 @@
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
     font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     font-feature-settings:"zero" 1;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
-  body{padding:14px;max-width:2040px;margin:0 auto;position:relative;min-height:100vh;}
+  body{padding:14px 14px 40px;max-width:2040px;margin:0 auto;position:relative;min-height:100vh;}
   /* atmosphere: layered radial glows + base gradient */
   body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
     background:
@@ -49,13 +49,28 @@
   *::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:2px solid transparent;background-clip:content-box}
   *::-webkit-scrollbar-thumb:hover{background:var(--line2)}
   ::selection{background:rgba(31,224,138,.30);color:#fff}
-  .head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
-  .logo{font-weight:700;font-size:20px;letter-spacing:1px;
-    font-family:var(--display);text-transform:uppercase}
-  .logo .b{color:var(--buy);text-shadow:0 0 18px var(--glow-buy)}
-  .logo .s{color:var(--sell);text-shadow:0 0 18px var(--glow-sell)}
-  .tag{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;
-    padding:3px 8px;text-transform:uppercase;letter-spacing:1px}
+  /* ===== top nav (trading-desk header bar) ===== */
+  .topnav{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:18px;
+    height:54px;padding:0 16px;margin:-14px -14px 14px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(13,18,27,.96),rgba(8,11,17,.94));
+    backdrop-filter:blur(14px) saturate(1.25);box-shadow:0 14px 40px -28px #000}
+  .brand{display:flex;align-items:center;gap:9px;padding-right:6px}
+  .brand-logo{width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+    border-radius:7px;font-size:14px;color:#02160d;font-weight:900;
+    background:linear-gradient(135deg,var(--buy),#0c9c63);box-shadow:0 0 18px -2px var(--glow-buy)}
+  .brand-txt{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:1.5px;color:var(--txt)}
+  .brand-txt b{color:var(--buy);font-weight:700}
+  .brand-tag{font-size:8px;letter-spacing:1.5px;color:var(--dim);border:1px solid var(--line);
+    border-radius:5px;padding:2px 5px;text-transform:uppercase;align-self:center}
+  .nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .nav-stat{display:flex;flex-direction:column;line-height:1.1;text-align:right}
+  .nav-stat .ns-k{font-size:7px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase}
+  .nav-stat .ns-v{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+  .nav-bal{display:flex;align-items:center;gap:8px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:6px 11px}
+  .nav-bal .nb-k{font-size:8px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase}
+  .nav-bal .nb-v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;font-family:var(--display)}
+  .nav-bal .nb-pnl{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
   .controls{display:flex;gap:8px;flex-wrap:wrap;background:var(--panel);
     border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
   .controls input,.controls select{background:var(--panel2);border:1px solid var(--line);
@@ -88,16 +103,6 @@
   .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:6px;margin-bottom:10px;position:relative}
   #price{height:380px} #rsi{height:130px} #wt{height:150px}
-  /* drawing toolbar (overlay, left edge of price pane) */
-  .drawbar{position:absolute;top:38px;left:8px;z-index:6;display:flex;flex-direction:column;gap:5px}
-  .drawbar .tool{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-    background:var(--panel2);border:1px solid var(--line);color:var(--dim);cursor:pointer;
-    font-size:15px;line-height:1;user-select:none}
-  .drawbar .tool:hover{color:var(--txt);border-color:var(--mid)}
-  .drawbar .tool.on{background:var(--mid);color:#02160d;border-color:var(--mid)}
-  .drawbar .tool.clr:hover{color:var(--sell);border-color:var(--sell)}
-  .drawbar .tool.rst{margin-top:4px}
-  .drawbar .tool.rst:hover{color:var(--buy);border-color:var(--buy)}
   .lbl{position:absolute;top:10px;left:12px;font-size:10px;color:var(--dim);
     letter-spacing:1px;z-index:3;pointer-events:none}
   .lgd{position:absolute;top:10px;right:12px;font-size:10px;z-index:3;text-align:right;pointer-events:none;line-height:1.5}
@@ -108,16 +113,17 @@
     padding-top:10px;margin-top:6px}
   .note b{color:var(--amber)}
   a{color:var(--mid)}
-  /* ---- tabs ---- */
-  .tabs{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);
-    border-radius:12px;padding:5px;margin-bottom:12px;position:sticky;top:8px;z-index:20;
-    backdrop-filter:blur(8px);overflow-x:auto}
-  .tab{flex:1;min-width:74px;text-align:center;padding:9px 6px;border-radius:8px;cursor:pointer;
-    font-size:11px;letter-spacing:1px;color:var(--dim);user-select:none;white-space:nowrap;
-    transition:background .12s,color .12s}
-  .tab .ti{font-size:13px;display:block;margin-bottom:2px}
-  .tab.on{background:var(--panel2);color:var(--txt);box-shadow:inset 0 0 0 1px var(--line)}
-  .tab.on[data-tab="chart"]{color:var(--buy)}
+  /* ---- nav tabs (inline in the top bar) ---- */
+  .tabs{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{position:relative;padding:18px 14px;cursor:pointer;font-family:var(--display);
+    font-size:12px;letter-spacing:.5px;color:var(--dim);user-select:none;white-space:nowrap;
+    transition:color .15s}
+  .tab .ti{display:none}
+  .tab:hover{color:var(--txt)}
+  .tab.on{color:var(--txt)}
+  .tab.on::after{content:"";position:absolute;left:10px;right:10px;bottom:0;height:2px;
+    border-radius:2px;background:var(--buy);box-shadow:0 0 12px var(--glow-buy)}
   .panel-view{display:none;animation:fade .18s ease}
   .panel-view.on{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -280,20 +286,14 @@
      — layered on top; only restyles existing classes
      =================================================================== */
   /* card depth: subtle top-light gradient + deep ambient shadow + crisp hairline */
-  .controls,.chartwrap,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.tabs,.poscard,.results{
+  .controls,.chartwrap,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.poscard,.results{
     background-image:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0) 60%);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 24px 50px -34px rgba(0,0,0,.95);}
   .cell,.stat,.tp-stats .st{background-image:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));}
   .cell:hover,.stat:hover{border-color:var(--line2)}
   /* typography: display font for headings, labels, big numbers + tabular figures */
-  .logo,.tab,.sect h3,.wl-head,.tokbar .tk .nm,.tp-go,.bs-tab,.unit{font-family:var(--display)}
+  .sect h3,.wl-head,.tokbar .tk .nm,.tp-go,.bs-tab,.unit{font-family:var(--display)}
   .cell .v,.stat .v,.tp-stats .st .v,.tokbar .m .v,.poschip b{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
-  /* tabs */
-  .tab{font-weight:600;transition:background .15s,color .15s,box-shadow .15s}
-  .tab:hover{color:var(--txt)}
-  .tabs{background:rgba(10,14,21,.72);backdrop-filter:blur(12px) saturate(1.2)}
-  .tab.on{box-shadow:inset 0 0 0 1px var(--line2)}
-  .tab.on[data-tab="chart"]{color:var(--buy)}
   /* interactive transitions */
   .pill,.ind,.tog,.unit,.bs-tab,.quick div,.tp-go,.btn,.mini,.closebtn,.res,.wl{
     transition:transform .1s ease,background .15s,border-color .15s,color .15s,box-shadow .15s}
@@ -320,32 +320,51 @@
   /* watchlist active accent */
   .wl.active{box-shadow:inset 3px 0 0 var(--buy)}
   .wl .ic,.tokbar .tk .ic{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-  /* drawbar — glassy floating toolbar */
-  .drawbar .tool{backdrop-filter:blur(8px);transition:all .12s;box-shadow:0 6px 18px -10px rgba(0,0,0,.8)}
-  .drawbar .tool.on{box-shadow:0 8px 22px -10px var(--glow-buy)}
   /* tables: zebra-free, glow on hover handled already; numbers tabular */
   .tbl td{font-variant-numeric:tabular-nums}
   /* page-load staggered reveal */
   @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-  .head{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
-  .tabs{animation:rise .5s cubic-bezier(.2,.7,.2,1) .06s both}
+  .terminal{animation:rise .5s cubic-bezier(.2,.7,.2,1) .06s both}
+  /* ===== bottom status bar ===== */
+  .statusbar{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;align-items:center;
+    justify-content:space-between;gap:12px;height:26px;padding:0 14px;font-size:10px;
+    letter-spacing:.4px;color:var(--dim);
+    background:linear-gradient(180deg,rgba(10,14,21,.92),rgba(6,9,14,.97));
+    border-top:1px solid var(--line);backdrop-filter:blur(10px)}
+  .statusbar .sb-left,.statusbar .sb-right{display:flex;align-items:center;gap:9px;min-width:0}
+  .statusbar .sb-right{overflow:hidden;white-space:nowrap}
+  .statusbar b{color:var(--txt);font-variant-numeric:tabular-nums}
+  .sb-sep{width:1px;height:11px;background:var(--line2)}
+  .sb-dot{width:7px;height:7px;border-radius:50%;background:var(--buy);
+    box-shadow:0 0 8px var(--glow-buy);animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
   @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
 </head>
 <body>
-  <div class="head">
-    <div class="logo"><span class="b">SIGNAL</span> // <span class="s">TERMINAL</span></div>
-    <div class="tag">dexscreener feed</div>
-    <span class="cloudbadge" id="cloudbadge" style="margin-left:auto">● local</span>
-  </div>
-
-  <div class="tabs" id="tabs">
-    <div class="tab on" data-tab="chart"><span class="ti">▤</span>CHART</div>
-    <div class="tab" data-tab="paper"><span class="ti">◧</span>PAPER</div>
-    <div class="tab" data-tab="journal"><span class="ti">✎</span>JOURNAL</div>
-    <div class="tab" data-tab="stats"><span class="ti">◔</span>STATS</div>
-    <div class="tab" data-tab="settings"><span class="ti">⚙</span>SETTINGS</div>
-  </div>
+  <header class="topnav">
+    <div class="brand">
+      <span class="brand-logo">◆</span>
+      <span class="brand-txt">SIGNAL<b>TERMINAL</b></span>
+      <span class="brand-tag">paper</span>
+    </div>
+    <nav class="tabs" id="tabs">
+      <div class="tab on" data-tab="chart">Chart</div>
+      <div class="tab" data-tab="paper">Positions</div>
+      <div class="tab" data-tab="journal">Journal</div>
+      <div class="tab" data-tab="stats">Stats</div>
+      <div class="tab" data-tab="settings">Settings</div>
+    </nav>
+    <div class="nav-right">
+      <div class="nav-stat"><span class="ns-k">SOL/USD</span><span class="ns-v" id="nav-sol">$—</span></div>
+      <div class="nav-bal">
+        <span class="nb-k">Equity</span>
+        <span class="nb-v" id="nav-equity">$—</span>
+        <span class="nb-pnl" id="nav-pnl">—</span>
+      </div>
+      <span class="cloudbadge" id="cloudbadge">● local</span>
+    </div>
+  </header>
 
   <div class="panel-view on" id="view-chart">
   <div class="terminal">
@@ -427,14 +446,6 @@
       <div class="chartwrap" id="pricewrap">
         <div class="lbl" id="pricelbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
         <div class="lgd"><span class="f">— EMA9 (fast)</span><br><span class="sw">— EMA21/50 (slow)</span></div>
-        <div class="drawbar" id="drawbar">
-          <div class="tool" data-tool="trend" title="Trend line (click 2 points)">╱</div>
-          <div class="tool" data-tool="hline" title="Horizontal line (click 1 point)">─</div>
-          <div class="tool" data-tool="fib" title="Fib retracement (click high then low)">≣</div>
-          <div class="tool" data-tool="undo" title="Undo last drawing (Ctrl+Z)">↶</div>
-          <div class="tool clr" data-tool="clear" title="Clear all drawings">⌫</div>
-          <div class="tool rst" id="chart-reset" title="Reset / fit chart to data">⟲</div>
-        </div>
         <div id="price"></div>
       </div>
       <div class="chartwrap" id="embedwrap" style="display:none">
@@ -573,6 +584,19 @@ create policy "own row" on app_state for all
       </div>
     </div>
   </div>
+
+  <footer class="statusbar">
+    <div class="sb-left">
+      <span class="sb-dot"></span><span id="sb-conn">CONNECTED</span>
+      <span class="sb-sep"></span><span>GeckoTerminal · DexScreener</span>
+      <span class="sb-sep"></span><span id="sb-feed">feed idle</span>
+    </div>
+    <div class="sb-right">
+      <span id="sb-pair">no token loaded</span>
+      <span class="sb-sep"></span><span>SOL <b id="sb-sol">$—</b></span>
+      <span class="sb-sep"></span><span id="sb-clock">--:--:-- UTC</span>
+    </div>
+  </footer>
 
 <script>
 const GT='https://api.geckoterminal.com/api/v2';
@@ -774,7 +798,10 @@ async function fetchSol(){
       .sort((a,b)=>(((b.liquidity&&b.liquidity.usd)||0)-((a.liquidity&&a.liquidity.usd)||0)));
     const stable=pairs.find(p=>/^(USDC|USDT)$/i.test((p.quoteToken&&p.quoteToken.symbol)||''));
     const best=stable||pairs[0];
-    if(best&&+best.priceUsd>0){solUsd=+best.priceUsd;updateConv();}
+    if(best&&+best.priceUsd>0){solUsd=+best.priceUsd;updateConv();
+      const s='$'+solUsd.toLocaleString(undefined,{maximumFractionDigits:2});
+      const ns=document.getElementById('nav-sol'),ss=document.getElementById('sb-sol');
+      if(ns)ns.textContent=s;if(ss)ss.textContent=s;}
   }catch(e){}
 }
 
@@ -790,10 +817,8 @@ async function fetchOHLC(net,pool,tf){
 }
 /* ---------- charting ---------- */
 let pchart,rchart,cs,e9s,e21s,e50s,rs,fibLines=[],ready=false;
-/* drawing tools + cached markers for live redraw */
-let drawTool=null,drawPts=[],drawings=[],lastSigMarks=[],lastTimes=[];
-/* live drawing preview (shown between first and second click) */
-let previewSeries=null,previewPLs=[];
+/* cached markers/times for live redraw */
+let lastSigMarks=[],lastTimes=[];
 function chartH(){return Math.max(440,Math.round(window.innerHeight-360));}
 /* indicator series */
 let vols,bbMid,bbUp,bbLo,projMid,projUp,projLo;
@@ -851,9 +876,6 @@ function initCharts(){
     wtchart.applyOptions({width:document.getElementById('wt').clientWidth});}).observe(document.getElementById('price'));
   // keep price pane tall on viewport resize
   window.addEventListener('resize',()=>{if(ready)pchart.applyOptions({height:chartH()});});
-  // drawing tools: click to place trend lines / horizontal lines / fib levels
-  pchart.subscribeClick(onChartClick);
-  pchart.subscribeCrosshairMove(onChartHover);
   ready=true;
 }
 function lineData(c,arr){const o=[];for(let i=0;i<c.length;i++)if(arr[i]!=null)o.push({time:c[i].time,value:arr[i]});return o;}
@@ -1515,95 +1537,14 @@ function spotSell(all){
   refreshTradeUI();applyMarkers();updateConv();
 }
 
-/* ---------- chart drawing tools ---------- */
-const FIB_COLS={0:'#5b8dff',0.236:'#7b8794',0.382:'#7b8794',0.5:'#e6b450',0.618:'#16c98a',0.786:'#7b8794',1:'#5b8dff'};
-const FIB_LV=[0,0.236,0.382,0.5,0.618,0.786,1];
-function setTool(t){
-  drawTool=(drawTool===t)?null:t;drawPts=[];clearPreview();
-  document.querySelectorAll('#drawbar .tool').forEach(el=>el.classList.toggle('on',el.dataset.tool&&el.dataset.tool===drawTool));
-  if(ready)pchart.applyOptions({handleScroll:!drawTool,handleScale:!drawTool});
-  const hint={trend:'click 2 points',hline:'click 1 point',fib:'click high then low'}[drawTool];
-  setStatus(drawTool?`drawing: ${drawTool} — ${hint} (Esc to cancel, Ctrl+Z to undo)`:'drawing tool off',false);
-}
-function snapTime(x,t){
-  if(t)return t;
-  const ct=ready?pchart.timeScale().coordinateToTime(x):null;
-  if(ct)return ct;
-  return candlesRaw.length?candlesRaw[candlesRaw.length-1].time:Math.floor(Date.now()/1000);
-}
-function clearPreview(){
-  if(previewSeries){try{pchart.removeSeries(previewSeries);}catch(e){}previewSeries=null;}
-  previewPLs.forEach(r=>{try{cs.removePriceLine(r);}catch(e){}});previewPLs=[];
-}
-// live preview between first and second click
-function onChartHover(param){
-  if(!drawTool||drawPts.length!==1||!param||!param.point){return;}
-  const price=cs.coordinateToPrice(param.point.y);if(price==null)return;
-  const time=snapTime(param.point.x,param.time);
-  const a=drawPts[0];
-  clearPreview();
-  if(drawTool==='trend'){
-    previewSeries=pchart.addLineSeries({color:'rgba(34,211,238,0.6)',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
-    const pts=[{time:a.time,value:a.price},{time,value:price}].sort((x,y)=>x.time-y.time);
-    if(pts[0].time===pts[1].time)pts[1].time=pts[1].time+60;
-    previewSeries.setData(pts);
-  }else if(drawTool==='fib'){
-    const hi=Math.max(a.price,price),lo=Math.min(a.price,price);
-    previewPLs.push(cs.createPriceLine({price:hi,color:'rgba(91,141,255,0.6)',lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''}));
-    previewPLs.push(cs.createPriceLine({price:lo,color:'rgba(91,141,255,0.6)',lineWidth:1,lineStyle:2,axisLabelVisible:false,title:''}));
-  }
-}
-function onChartClick(param){
-  if(!drawTool||!param||!param.point)return;
-  const price=cs.coordinateToPrice(param.point.y);if(price==null)return;
-  const time=snapTime(param.point.x,param.time);
-  if(drawTool==='hline'){
-    const pl=cs.createPriceLine({price,color:'#e6b450',lineWidth:1,lineStyle:0,axisLabelVisible:true,title:'H'});
-    drawings.push({kind:'pl',refs:[pl]});return;
-  }
-  drawPts.push({time,price});
-  if(drawPts.length<2)return;
-  const a=drawPts[0],b=drawPts[1];drawPts=[];clearPreview();
-  if(drawTool==='trend'){
-    const ls=pchart.addLineSeries({color:'#22d3ee',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
-    const pts=[{time:a.time,value:a.price},{time:b.time,value:b.price}].sort((x,y)=>x.time-y.time);
-    if(pts[0].time===pts[1].time)pts[1].time=pts[1].time+60;
-    ls.setData(pts);drawings.push({kind:'series',refs:[ls]});
-  }else if(drawTool==='fib'){
-    const hi=Math.max(a.price,b.price),lo=Math.min(a.price,b.price),d=hi-lo;
-    const refs=[];
-    for(const L of FIB_LV){
-      refs.push(cs.createPriceLine({price:hi-d*L,color:FIB_COLS[L]||'#7b8794',lineWidth:1,
-        lineStyle:(L===0.5||L===0.618)?0:2,axisLabelVisible:true,title:'fib '+L}));}
-    drawings.push({kind:'pl',refs});
-  }
-  setStatus(`${drawTool} placed — keep clicking to add more, or pick another tool`,false);
-}
-function undoDrawing(){
-  const d=drawings.pop();
-  if(!d){setStatus('nothing to undo',false);return;}
-  if(d.kind==='pl')d.refs.forEach(r=>{try{cs.removePriceLine(r);}catch(e){}});
-  else d.refs.forEach(r=>{try{pchart.removeSeries(r);}catch(e){}});
-  setStatus('last drawing removed',false);
-}
-function clearDrawings(){
-  for(const d of drawings){
-    if(d.kind==='pl')d.refs.forEach(r=>{try{cs.removePriceLine(r);}catch(e){}});
-    else d.refs.forEach(r=>{try{pchart.removeSeries(r);}catch(e){}});
-  }
-  drawings=[];drawPts=[];clearPreview();setStatus('drawings cleared',false);
-}
-function resetChart(){
-  if(!ready)return;
-  [pchart,rchart,wtchart].forEach(c=>{try{c.timeScale().fitContent();}catch(e){}});
-  try{pchart.priceScale('right').applyOptions({autoScale:true});}catch(e){}
-  setStatus('chart reset to fit',false);
-}
-
 function renderAcct(){
-  const wrap=document.getElementById('acct-stats');if(!wrap)return;
   const eq=equityNow(),pnl=eq-STATE.bankroll,ret=pnl/STATE.bankroll;
   let unreal=0;for(const p of STATE.positions)unreal+=uPnl(p);
+  // top-nav balance pill
+  const ne=document.getElementById('nav-equity'),np=document.getElementById('nav-pnl');
+  if(ne)ne.textContent=money(eq);
+  if(np){np.textContent=pct(ret);np.className='nb-pnl '+cls(pnl);}
+  const wrap=document.getElementById('acct-stats');if(!wrap)return;
   wrap.innerHTML=`
     <div class="stat"><div class="k">Equity</div><div class="v">${money(eq)}</div></div>
     <div class="stat"><div class="k">Total PnL</div><div class="v ${cls(pnl)}">${money(pnl)} <span style="font-size:11px">(${pct(ret)})</span></div></div>
@@ -1771,18 +1712,6 @@ document.getElementById('t-size').addEventListener('input',updateConv);
 document.getElementById('quick').addEventListener('click',e=>{
   const b=e.target.closest('[data-amt]');if(!b)return;
   document.getElementById('t-size').value=b.dataset.amt;updateConv();});
-// chart drawing tools + reset
-document.getElementById('drawbar').addEventListener('click',e=>{
-  const t=e.target.closest('.tool');if(!t)return;
-  if(t.id==='chart-reset'){resetChart();return;}
-  if(t.dataset.tool==='clear'){clearDrawings();return;}
-  if(t.dataset.tool==='undo'){undoDrawing();return;}
-  setTool(t.dataset.tool);});
-// keyboard: Esc cancels the active tool, Ctrl+Z undoes the last drawing
-document.addEventListener('keydown',e=>{
-  const typing=/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'');
-  if(e.key==='Escape'&&drawTool){setTool(drawTool);return;}
-  if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')&&!typing){e.preventDefault();undoDrawing();}});
 // favorite star
 document.getElementById('tok-fav').onclick=()=>{
   if(!lastReq){setStatus('load a token first, then ★ to save it',true);return;}
@@ -1850,6 +1779,17 @@ document.getElementById('s-syncnow').onclick=async()=>{
   await cloudPull();};
 document.getElementById('s-signout').onclick=async()=>{
   if(sb){await sb.auth.signOut();sbUser=null;cloudBadge();setStatus('signed out (local data kept)',false);}};
+
+/* ---------- status bar ---------- */
+function tickStatusBar(){
+  const cl=document.getElementById('sb-clock');
+  if(cl)cl.textContent=new Date().toISOString().slice(11,19)+' UTC';
+  const pairEl=document.getElementById('sb-pair'),pair=(document.getElementById('m-pair')||{}).textContent||'';
+  if(pairEl)pairEl.textContent=(pair&&pair!=='—')?pair:'no token loaded';
+  const feed=document.getElementById('sb-feed'),liveOn=(document.getElementById('live')||{}).classList&&document.getElementById('live').classList.contains('on');
+  if(feed)feed.textContent=liveOn?'● live · '+curTF:(lastReq?'feed ready · '+curTF:'feed idle');
+}
+tickStatusBar();setInterval(tickStatusBar,1000);
 
 /* ---------- init ---------- */
 cloudInit();
