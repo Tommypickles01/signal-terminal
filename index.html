@@ -104,6 +104,18 @@
   @keyframes sigflashS{0%{box-shadow:0 0 0 0 rgba(255,77,109,0)}12%{box-shadow:0 0 20px 5px var(--glow-sell);background:rgba(255,77,109,.16)}100%{box-shadow:0 0 0 0 rgba(255,77,109,0);background:transparent}}
   .sig-flash-buy{animation:sigflashB 1s ease-out 5;border-radius:7px;padding:1px 5px;margin:-1px -5px}
   .sig-flash-sell{animation:sigflashS 1s ease-out 5;border-radius:7px;padding:1px 5px;margin:-1px -5px}
+  /* live signal glow dots on the price chart (pulse ~2min, then dull) */
+  #sigglow{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
+  .sgd{position:absolute;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);
+    transition:opacity .8s ease,box-shadow .8s ease}
+  .sgd.buy{background:#16ff9e;box-shadow:0 0 12px 3px rgba(22,255,158,.85)}
+  .sgd.sell{background:#ff4d6d;box-shadow:0 0 12px 3px rgba(255,77,109,.85)}
+  .sgd::after{content:"";position:absolute;inset:-4px;border-radius:50%}
+  .sgd.buy::after{border:2px solid rgba(22,255,158,.7);animation:sgpulse 1.5s ease-out infinite}
+  .sgd.sell::after{border:2px solid rgba(255,77,109,.7);animation:sgpulse 1.5s ease-out infinite}
+  @keyframes sgpulse{0%{transform:scale(.5);opacity:.9}100%{transform:scale(2.8);opacity:0}}
+  .sgd.dull{opacity:.45;box-shadow:none}
+  .sgd.dull::after{display:none}
   /* memecoin safety strip */
   .safety{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:-2px 0 10px}
   .sf-badge{font-family:var(--display);font-size:11px;font-weight:700;letter-spacing:.5px;
@@ -526,6 +538,7 @@
         <div class="lbl" id="pricelbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
         <div class="lgd"><span class="f">— EMA9 (fast)</span><br><span class="sw">— EMA21/50 (slow)</span></div>
         <div id="price"></div>
+        <div id="sigglow"></div>
       </div>
       <div class="chartwrap" id="embedwrap" style="display:none">
         <div class="lbl">DEXSCREENER · LIVE (tick)</div>
@@ -1229,6 +1242,7 @@ function initCharts(){
   charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
     if(!r||syncing)return;syncing=true;
     charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
+  pchart.timeScale().subscribeVisibleLogicalRangeChange(()=>positionGlows());
   // price & rsi use autosize; wt + macd are fixed-height (start hidden) so keep their width in sync
   new ResizeObserver(()=>{const pw=document.getElementById('price').clientWidth;
     if(pw&&document.getElementById('wtwrap').style.display!=='none')wtchart.applyOptions({width:pw});
@@ -1756,6 +1770,7 @@ function onRender(disp,s,meta){
   updateFavStar();
   markWatchlistActive();
   updateConv();
+  positionGlows();
   if(document.getElementById('view-paper').classList.contains('on'))renderPaper();
 }
 
@@ -1773,7 +1788,7 @@ function maybeFlashSignal(disp,s,conf){
   // only the most recent 2 bars count as "fresh"; ignore old historical signals
   const fresh=m._i>=disp.length-2;
   // first render of a token: prime the baseline, don't flash existing history
-  if(sigFlashTok!==tok){sigFlashTok=tok;lastFlashId=fresh?null:id;}
+  if(sigFlashTok!==tok){sigFlashTok=tok;lastFlashId=fresh?null:id;clearGlows();}
   if(!fresh||id===lastFlashId)return;
   lastFlashId=id;
   const cell=document.getElementById('m-sig');
@@ -1781,7 +1796,33 @@ function maybeFlashSignal(disp,s,conf){
     cell.classList.remove('sig-flash-buy','sig-flash-sell');void cell.offsetWidth;
     cell.classList.add(up?'sig-flash-buy':'sig-flash-sell');}
   startTitleFlash(`${m.side==='long'?'🟢 BUY':'🔴 SELL'} ${tokenSym()} ${conf!=null?conf+'%':''}`.trim());
+  const bar=disp[m._i];
+  if(bar)addGlow(m.time,m.side==='long'?bar.low:bar.high,m.side);
 }
+/* pulsing glow dots for freshly-fired signals (DOM overlay over the price chart) */
+let activeGlows=[];
+function clearGlows(){const l=document.getElementById('sigglow');if(l)l.innerHTML='';activeGlows=[];}
+function addGlow(time,price,side){
+  const layer=document.getElementById('sigglow');if(!layer)return;
+  const el=document.createElement('div');el.className='sgd '+(side==='long'?'buy':'sell');
+  layer.appendChild(el);activeGlows.push({time,price,el,born:Date.now()});positionGlows();
+}
+function positionGlows(){
+  if(!ready||!activeGlows.length)return;
+  const layer=document.getElementById('sigglow'),pe=document.getElementById('price');if(!layer||!pe)return;
+  const pr=pe.getBoundingClientRect(),lr=layer.getBoundingClientRect();
+  const dx=pr.left-lr.left,dy=pr.top-lr.top,now=Date.now(),ts=pchart.timeScale();
+  activeGlows=activeGlows.filter(g=>{
+    const age=now-g.born;
+    if(age>140000){g.el.remove();return false;}                 // retire ~20s after dulling
+    const x=ts.timeToCoordinate(g.time),y=cs.priceToCoordinate(g.price);
+    if(x==null||y==null){g.el.style.display='none';return true;}
+    g.el.style.display='';g.el.style.left=(dx+x)+'px';g.el.style.top=(dy+y)+'px';
+    if(age>120000)g.el.classList.add('dull');                    // dull after 2 minutes
+    return true;
+  });
+}
+setInterval(positionGlows,4000);
 function startTitleFlash(msg){
   stopTitleFlash();
   if(document.hasFocus())return;  // tab already visible — the cell glow is enough
