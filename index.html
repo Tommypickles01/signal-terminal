@@ -496,6 +496,10 @@
           <div class="pill on" data-mode="price">PRICE</div>
           <div class="pill" data-mode="mcap">MCAP</div>
         </div>
+        <div class="tfgroup" id="stratgroup" title="signal strategy">
+          <div class="pill on" data-strat="confluence">CONFLUENCE</div>
+          <div class="pill" data-strat="trend">TREND</div>
+        </div>
         <span class="sep"></span>
         <button class="btn live" id="live">● LIVE</button>
         <button class="btn live" id="embed">DEX ⧉</button>
@@ -626,6 +630,7 @@
       <div class="togrow">
         <div class="tog" id="s-autofollow">AUTO-FOLLOW SIGNALS</div>
         <div class="tog" id="s-allowshort">ALLOW SHORTS</div>
+        <div class="tog" id="s-breakeven">BREAK-EVEN AT 1R</div>
       </div>
       <div class="actrow"><button class="btn" id="s-save">SAVE SETTINGS</button>
         <button class="btn ghost" id="s-reset">RESET ACCOUNT</button></div>
@@ -963,11 +968,21 @@ function vidyaLevels(c,plvl,L=3,maxEach=4){
   return {sup:sup.filter(l=>!l.crossed).slice(-maxEach),res:res.filter(l=>!l.crossed).slice(-maxEach)};
 }
 
+/* most recent confirmed swing low/high before bar i (for swing-based stops) */
+function recentSwing(c,i,dir,L=3,lookback=30){
+  for(let k=i-L;k>=Math.max(L,i-lookback);k--){
+    let piv=true;
+    if(dir==='low'){for(let j=k-L;j<=k+L;j++){if(c[j].low<c[k].low){piv=false;break;}}if(piv)return c[k].low;}
+    else{for(let j=k-L;j<=k+L;j++){if(c[j].high>c[k].high){piv=false;break;}}if(piv)return c[k].high;}
+  }
+  return null;
+}
+
 /* ---------- signal engine ---------- */
 function signals(c){
   const closes=c.map(x=>x.close);
   const e9=ema(closes,9),e21=ema(closes,21),e50=ema(closes,50),e200=ema(closes,200);
-  const r=rsi(closes,14),ax=adx(c,14),at=atr(c,14),div=rsiDivergence(c,r,60,2);
+  const r=rsi(closes,14),ax=adx(c,14),at=atr(c,14),div=rsiDivergence(c,r,60,2),md=macd(closes,12,26,9);
   // BigBeluga confluence: Two-Pole crosses + VIDYA trend flips
   const tpo=twoPole(c,20), vid=vidya(c,34,20,2.0);
   const vUp=new Set(),vDn=new Set();
@@ -1000,15 +1015,38 @@ function signals(c){
     const strong=(ax[i]!=null&&ax[i]>25);
     const blockBuy=strong&&trend<0, blockSell=strong&&trend>0;
     const a=at[i]||0, entry=closes[i];
-    if(buy>=2&&!blockBuy&&pos!=='long'&&i-last>=2){
+    // choose firing rule by strategy. TREND = SuperTrend(VIDYA)+EMA+MACD all aligned.
+    let buyFire,sellFire,buyFac,sellFac;
+    if(STRAT==='trend'){
+      const mc=md.line[i]!=null&&md.signal[i]!=null&&md.line[i-1]!=null&&md.signal[i-1]!=null;
+      const macdUp=mc&&md.line[i]>md.signal[i]&&md.line[i-1]<=md.signal[i-1];
+      const macdDn=mc&&md.line[i]<md.signal[i]&&md.line[i-1]>=md.signal[i-1];
+      buyFire =vid.trendUp[i]===true && e50[i]!=null&&closes[i]>e50[i] && macdUp;
+      sellFire=vid.trendUp[i]===false&& e50[i]!=null&&closes[i]<e50[i] && macdDn;
+      buyFac=['superTrend','emaUp','macdUp']; sellFac=['superTrend','emaDn','macdDn'];
+    }else{
+      buyFire =buy>=2&&!blockBuy; sellFire=sell>=2&&!blockSell;
+      buyFac=Object.keys(bf).filter(k=>bf[k]); sellFac=Object.keys(sf).filter(k=>sf[k]);
+    }
+    if(buyFire&&pos!=='long'&&i-last>=2){
+      const sw=recentSwing(c,i,'low');
+      let stop=(sw!=null&&sw<entry)?sw-0.25*a:(a?entry-1.5*a:null);
+      let risk=stop!=null?entry-stop:null;
+      if(!(risk>0)){stop=a?entry-1.5*a:null;risk=stop!=null?entry-stop:null;}
+      const tp=risk>0?entry+1.5*risk:null;
       markers.push({time:c[i].time,position:'belowBar',color:'#16ff9e',shape:'circle',text:'B',_i:i,_r:r[i],
-        side:'long',factors:Object.keys(bf).filter(k=>bf[k]),
-        atr:a,sl:a?entry-1.5*a:null,tp:a?entry+2.6*a:null,adx:ax[i]==null?null:+ax[i].toFixed(0),trend});
+        side:'long',factors:buyFac,atr:a,sl:stop,tp,r0:risk>0?risk:null,
+        adx:ax[i]==null?null:+ax[i].toFixed(0),trend});
       pos='long';last=i;
-    }else if(sell>=2&&!blockSell&&pos==='long'&&i-last>=2){
+    }else if(sellFire&&pos==='long'&&i-last>=2){
+      const sw=recentSwing(c,i,'high');
+      let stop=(sw!=null&&sw>entry)?sw+0.25*a:(a?entry+1.5*a:null);
+      let risk=stop!=null?stop-entry:null;
+      if(!(risk>0)){stop=a?entry+1.5*a:null;risk=stop!=null?stop-entry:null;}
+      const tp=risk>0?entry-1.5*risk:null;
       markers.push({time:c[i].time,position:'aboveBar',color:'#ff4d6d',shape:'circle',text:'S',_i:i,_r:r[i],
-        side:'short',factors:Object.keys(sf).filter(k=>sf[k]),
-        atr:a,sl:a?entry+1.5*a:null,tp:a?entry-2.6*a:null,adx:ax[i]==null?null:+ax[i].toFixed(0),trend});
+        side:'short',factors:sellFac,atr:a,sl:stop,tp,r0:risk>0?risk:null,
+        adx:ax[i]==null?null:+ax[i].toFixed(0),trend});
       pos='flat';last=i;
     }}
   return {e9,e21,e50,e200,r,adx:ax,atr:at,markers,pos,tpo,vid};
@@ -1116,6 +1154,8 @@ let tpochart,tpoLine,tpoSig,tpoBuyLine,tpoSellLine;
 let vidyaUp,vidyaDn,vidyaLines=[],vidyaInfo=null;
 /* indicator toggle state */
 const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false,vidya:false};
+/* active strategy: 'confluence' (multi-factor vote) or 'trend' (SuperTrend+EMA+MACD) */
+let STRAT='confluence';
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
@@ -1382,6 +1422,13 @@ document.getElementById('modegroup').addEventListener('click',e=>{
   const p=e.target.closest('.pill');if(!p)return;
   document.querySelectorAll('#modegroup .pill').forEach(x=>x.classList.remove('on'));
   p.classList.add('on');mode=p.dataset.mode;if(candlesRaw.length)render(candlesRaw,metaCur);});
+document.getElementById('stratgroup').addEventListener('click',e=>{
+  const p=e.target.closest('.pill');if(!p)return;
+  document.querySelectorAll('#stratgroup .pill').forEach(x=>x.classList.remove('on'));
+  p.classList.add('on');STRAT=p.dataset.strat;STATE.settings.strategy=STRAT;saveState();
+  if(candlesRaw.length)render(candlesRaw,metaCur);});
+// reflect persisted strategy on load
+document.querySelectorAll('#stratgroup .pill').forEach(x=>x.classList.toggle('on',x.dataset.strat===STRAT));
 document.getElementById('indrow').addEventListener('click',e=>{
   const t=e.target.closest('.ind');if(!t)return;
   const key=t.dataset.ind;ind[key]=!ind[key];t.classList.toggle('on',ind[key]);
@@ -1419,8 +1466,9 @@ document.getElementById('embed').onclick=function(){
    =================================================================== */
 const SKEY='st_state_v1';
 const DEF_SETTINGS={feeBps:30,slipBps:20,sizePct:10,gradeBars:8,autoConf:60,
-  autoFollow:false,allowShort:false,sbUrl:'',sbKey:'',email:''};
+  autoFollow:false,allowShort:false,breakEven:true,strategy:'confluence',sbUrl:'',sbKey:'',email:''};
 let STATE=loadState();
+STRAT=STATE.settings.strategy||'confluence';
 let sb=null, sbUser=null, pushTimer=null;
 
 function freshState(bankroll=10000){
@@ -1522,7 +1570,7 @@ function openPos(side){
   STATE.cash += (side==='long'? -(qty*slipPx) : (qty*slipPx)) - fee;
   const riskUsd=sl?Math.abs(slipPx-sl)*qty:null;
   STATE.positions.push({id:'p'+Date.now(),token:id,sym:tokenSym(),tf:curTF,side,qty,
-    entry:slipPx,sl,tp,riskUsd,feeIn:fee,openT:Math.floor(Date.now()/1000),
+    entry:slipPx,sl,tp,riskUsd,r0:sl?Math.abs(slipPx-sl):null,be:false,feeIn:fee,openT:Math.floor(Date.now()/1000),
     auto:false,lastPx:px});
   recordFill(side==='long'?'buy':'sell',qty,slipPx);
   saveState();
@@ -1555,11 +1603,16 @@ function checkStops(){
   const id=tokenId(),px=livePrice();if(!px)return;
   for(const p of STATE.positions){
     if(p.token!==id)continue;p.lastPx=px;
+    // move stop to break-even once price reaches +1R
+    if(STATE.settings.breakEven&&p.r0&&!p.be){
+      if(p.side==='long'&&px>=p.entry+p.r0){p.sl=p.entry;p.be=true;saveState();setStatus(`${p.sym} → break-even at 1R`,false);}
+      else if(p.side==='short'&&px<=p.entry-p.r0){p.sl=p.entry;p.be=true;saveState();setStatus(`${p.sym} → break-even at 1R`,false);}
+    }
     if(p.side==='long'){
-      if(p.sl&&px<=p.sl){closePos(p.id,'stop');return;}
+      if(p.sl&&px<=p.sl){closePos(p.id,p.be?'break-even':'stop');return;}
       if(p.tp&&px>=p.tp){closePos(p.id,'target');return;}
     }else{
-      if(p.sl&&px>=p.sl){closePos(p.id,'stop');return;}
+      if(p.sl&&px>=p.sl){closePos(p.id,p.be?'break-even':'stop');return;}
       if(p.tp&&px<=p.tp){closePos(p.id,'target');return;}
     }
   }
@@ -1573,7 +1626,10 @@ function checkStops(){
    =================================================================== */
 const FACTOR_LABEL={rsiOS:'RSI oversold flip',emaReclaim:'Reclaim EMA21',emaCross:'EMA9×21 up',
   volSpike:'Vol-spike green',rsiOB:'RSI overbought flip',emaLose:'Lose EMA21',
-  emaXdn:'EMA9×21 down',volSpikeDn:'Vol-spike red'};
+  emaXdn:'EMA9×21 down',volSpikeDn:'Vol-spike red',
+  bullDiv:'Bullish RSI div',bearDiv:'Bearish RSI div',tpoBuy:'2-Pole buy cross',tpoSell:'2-Pole sell cross',
+  vidyaUp:'VIDYA flip up',vidyaDn:'VIDYA flip down',
+  superTrend:'SuperTrend aligned',emaUp:'Above EMA50',emaDn:'Below EMA50',macdUp:'MACD cross up',macdDn:'MACD cross down'};
 let lastAutoId=null;
 
 function processSignals(disp,s){
@@ -1640,14 +1696,15 @@ function maybeAutoFollow(s){
   const have=STATE.positions.find(p=>p.token===tokenId());
   if(m.side==='long'){
     if(have&&have.side==='long')return;
-    autoOpen('long',conf);
+    autoOpen('long',conf,m);
   }else{
     if(have&&have.side==='long'){closePos(have.id,'signal');return;}
-    if(STATE.settings.allowShort&&!(have&&have.side==='short'))autoOpen('short',conf);
+    if(STATE.settings.allowShort&&!(have&&have.side==='short'))autoOpen('short',conf,m);
   }
 }
-/* like openPos but flagged auto + confidence-scaled size, no DOM inputs required */
-function autoOpen(side,conf){
+/* like openPos but flagged auto + confidence-scaled size, no DOM inputs required.
+   Carries the signal's swing stop / 1.5R target so break-even-at-1R can manage it. */
+function autoOpen(side,conf,m){
   const px=livePrice();if(!px)return;
   const have=STATE.positions.find(p=>p.token===tokenId());
   if(have){if(have.side===side)return;closePos(have.id,'flip');}
@@ -1656,8 +1713,9 @@ function autoOpen(side,conf){
   const notional=eq*STATE.settings.sizePct/100*(0.5+conf*0.5); // scale 50–100% of base by confidence
   const qty=notional/slipPx, fee=notional*STATE.settings.feeBps/1e4;
   STATE.cash += (side==='long'?-(qty*slipPx):(qty*slipPx))-fee;
+  const sl=(m&&m.sl)||null, tp=(m&&m.tp)||null, r0=sl!=null?Math.abs(slipPx-sl):null;
   STATE.positions.push({id:'p'+Date.now(),token:tokenId(),sym:tokenSym(),tf:curTF,side,qty,
-    entry:slipPx,sl:null,tp:null,riskUsd:null,feeIn:fee,openT:Math.floor(Date.now()/1000),
+    entry:slipPx,sl,tp,riskUsd:r0!=null?r0*qty:null,r0,be:false,feeIn:fee,openT:Math.floor(Date.now()/1000),
     auto:true,conf,lastPx:px});
   saveState();
   setStatus(`AUTO ${side.toUpperCase()} ${tokenSym()} · conf ${(conf*100).toFixed(0)}% · $${fmtBig(notional)}`,false);
@@ -2108,6 +2166,7 @@ function loadSettingsForm(){
   document.getElementById('s-conf').value=s.autoConf;
   document.getElementById('s-autofollow').classList.toggle('on',s.autoFollow);
   document.getElementById('s-allowshort').classList.toggle('on',s.allowShort);
+  document.getElementById('s-breakeven').classList.toggle('on',s.breakEven!==false);
   document.getElementById('s-suburl').value=s.sbUrl||'';
   document.getElementById('s-subkey').value=s.sbKey||'';
   document.getElementById('s-email').value=s.email||'';
@@ -2119,6 +2178,7 @@ function saveSettingsForm(){
   s.gradeBars=Math.max(1,Math.round(num('s-grade',s.gradeBars)));s.autoConf=num('s-conf',s.autoConf);
   s.autoFollow=document.getElementById('s-autofollow').classList.contains('on');
   s.allowShort=document.getElementById('s-allowshort').classList.contains('on');
+  s.breakEven=document.getElementById('s-breakeven').classList.contains('on');
   const oUrl=s.sbUrl,oKey=s.sbKey;
   s.sbUrl=document.getElementById('s-suburl').value.trim();
   s.sbKey=document.getElementById('s-subkey').value.trim();
@@ -2191,6 +2251,7 @@ document.getElementById('journal-wrap').addEventListener('input',e=>{
 // settings toggles + buttons
 document.getElementById('s-autofollow').onclick=function(){this.classList.toggle('on');};
 document.getElementById('s-allowshort').onclick=function(){this.classList.toggle('on');};
+document.getElementById('s-breakeven').onclick=function(){this.classList.toggle('on');};
 document.getElementById('s-save').onclick=saveSettingsForm;
 document.getElementById('s-reset').onclick=()=>{
   if(!confirm('Reset account? This wipes positions, trades, and signal memory (settings & cloud creds kept).'))return;
