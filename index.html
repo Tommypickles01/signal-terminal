@@ -33,7 +33,7 @@
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
     font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     font-feature-settings:"zero" 1;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
-  body{padding:14px 14px 40px;max-width:2040px;margin:0 auto;position:relative;min-height:100vh;}
+  body{padding:14px 18px 40px;max-width:none;margin:0 auto;position:relative;min-height:100vh;}
   /* atmosphere: layered radial glows + base gradient */
   body::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
     background:
@@ -102,7 +102,7 @@
   /* charts */
   .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;
     padding:6px;margin-bottom:10px;position:relative}
-  #price{height:clamp(360px,50vh,560px)} #rsi{height:118px} #wt{height:130px}
+  #price{height:clamp(380px,58vh,760px)} #rsi{height:118px} #wt{height:130px}
   .lbl{position:absolute;top:10px;left:12px;font-size:10px;color:var(--dim);
     letter-spacing:1px;z-index:3;pointer-events:none}
   .lgd{position:absolute;top:10px;right:12px;font-size:10px;z-index:3;text-align:right;pointer-events:none;line-height:1.5}
@@ -180,7 +180,7 @@
   .cloudbadge{font-size:10px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
   .cloudbadge.on{color:var(--buy);border-color:var(--buy)}
   /* ===== terminal layout ===== */
-  .terminal{display:grid;grid-template-columns:212px minmax(0,1fr) 290px;gap:10px;align-items:start}
+  .terminal{display:grid;grid-template-columns:236px minmax(0,1fr) 312px;gap:12px;align-items:start}
   .sidebar,.tradepanel{background:var(--panel);border:1px solid var(--line);border-radius:14px;
     padding:12px;position:sticky;top:64px;max-height:calc(100vh - 80px);overflow-y:auto}
   .center{min-width:0}
@@ -277,8 +277,23 @@
   .tp-stats .st{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px}
   .tp-stats .st .k{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
   .tp-stats .st .v{font-size:13px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  @media(max-width:1180px){.terminal{grid-template-columns:1fr}
-    .sidebar,.tradepanel{position:static;max-height:none}}
+  /* tablet: drop the watchlist into the chart column, keep trade panel on the side */
+  @media(max-width:1180px){.terminal{grid-template-columns:minmax(0,1fr) 300px}
+    .sidebar{grid-column:1 / -1;position:static;max-height:none}
+    .tradepanel{position:sticky;top:64px}}
+  /* phone: single column, everything stacks, touch-friendly + tighter chrome */
+  @media(max-width:760px){
+    body{padding:8px 10px 32px}
+    .terminal{grid-template-columns:1fr;gap:10px}
+    .sidebar,.tradepanel{grid-column:auto;position:static;max-height:none}
+    #price{height:clamp(300px,46vh,460px)}
+    #rsi{height:96px} #wt{height:104px}
+    .topnav{gap:10px;padding:0 10px;height:50px}
+    .nav-stat{display:none}            /* hide ticker stats, keep balance */
+    .controls input{min-width:0}
+    .pill,.ind,.tog,.unit,.quick div,.bs-tab{padding-top:10px;padding-bottom:10px}
+    .chartwrap{padding:4px}
+  }
 
   /* ===================================================================
      DESIGN SYSTEM POLISH  (midnight trading desk)
