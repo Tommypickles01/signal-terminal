@@ -512,6 +512,7 @@
         <div class="ind" data-ind="vwap">VWAP</div>
         <div class="ind" data-ind="macd">MACD</div>
         <div class="ind" data-ind="tpo">2-POLE</div>
+        <div class="ind" data-ind="vidya">VIDYA</div>
       </div>
 
       <div class="status" id="status">Search a token or paste a DexScreener link / pool address, then hit LOAD.</div>
@@ -900,6 +901,68 @@ function twoPole(c,filterLen=20){
   return {tp,tpp,buys,sells,buyLine,sellLine};
 }
 
+/* Volumatic VIDYA (BigBeluga). CMO-adaptive moving average; trend flips when
+   price crosses ATR bands; line trails the opposite band like a SuperTrend.
+   Returns the colored line, trend, flip points, carried level (plvl) for the
+   pivot system, and running buy/sell volume within the current trend. */
+function vidya(c,len=34,mom=20,bandMult=2.0){
+  const n=c.length,src=c.map(x=>x.close);
+  const alpha=2/(len+1);
+  const mUp=Array(n).fill(0),mDn=Array(n).fill(0);
+  for(let i=1;i<n;i++){const d=src[i]-src[i-1];mUp[i]=d>=0?d:0;mDn[i]=d>=0?0:-d;}
+  const vid=Array(n).fill(null);let prev=null;
+  for(let i=mom;i<n;i++){
+    let sp=0,sn=0;for(let j=i-mom+1;j<=i;j++){sp+=mUp[j];sn+=mDn[j];}
+    const denom=sp+sn,absCmo=denom===0?0:Math.abs(100*(sp-sn)/denom);
+    const k=alpha*absCmo/100;
+    const v=k*src[i]+(1-k)*(prev==null?src[i]:prev);prev=v;vid[i]=v;}
+  const sv=smaArr(vid,15);          // smaVidya
+  const at=atr(c,200);
+  const upper=sv.map((v,i)=>(v==null||at[i]==null)?null:v+at[i]*bandMult);
+  const lower=sv.map((v,i)=>(v==null||at[i]==null)?null:v-at[i]*bandMult);
+  const trendUp=Array(n).fill(null);let tu=null;
+  for(let i=1;i<n;i++){
+    if(upper[i]==null||upper[i-1]==null||lower[i]==null||lower[i-1]==null){trendUp[i]=tu;continue;}
+    if(src[i]>upper[i]&&src[i-1]<=upper[i-1])tu=true;
+    else if(src[i]<lower[i]&&src[i-1]>=lower[i-1])tu=false;
+    trendUp[i]=tu;}
+  const line=Array(n).fill(null),col=Array(n).fill(0),plvl=Array(n).fill(null);
+  let carry=null;
+  for(let i=0;i<n;i++){const t=trendUp[i];
+    if(t==null){plvl[i]=carry;continue;}
+    const changed=i>0&&trendUp[i-1]!=null&&trendUp[i-1]!==t;
+    const val=changed?carry:(t?lower[i]:upper[i]);
+    line[i]=changed?null:val; col[i]=t?1:-1; plvl[i]=val; carry=val;}
+  const flips=[];
+  for(let i=1;i<n;i++){if(trendUp[i]==null||trendUp[i-1]==null)continue;
+    if(trendUp[i]&&!trendUp[i-1])flips.push({i,up:true});
+    if(!trendUp[i]&&trendUp[i-1])flips.push({i,up:false});}
+  // running buy/sell volume in the current trend (resets on each flip)
+  let uv=0,dv=0;const upArr=Array(n).fill(0),dnArr=Array(n).fill(0);
+  for(let i=0;i<n;i++){
+    if(i>0&&trendUp[i]!=null&&trendUp[i-1]!=null&&trendUp[i]!==trendUp[i-1]){uv=0;dv=0;}
+    if(c[i].close>c[i].open)uv+=c[i].volume||0;else if(c[i].close<c[i].open)dv+=c[i].volume||0;
+    upArr[i]=uv;dnArr[i]=dv;}
+  const L=n-1,avgD=(upArr[L]+dnArr[L])/2,delta=avgD?(upArr[L]-dnArr[L])/avgD:0;
+  return {line,col,upper,lower,plvl,trendUp,flips,upArr,dnArr,delta};
+}
+/* pivot-based support/resistance with the average volume at each pivot; a level
+   is removed once the VIDYA line (plvl) crosses through it. Returns the active
+   levels (most recent few each side). */
+function vidyaLevels(c,plvl,L=3,maxEach=4){
+  const n=c.length,sup=[],res=[];
+  const avgVol=i=>{let s=0,k=0;for(let j=Math.max(0,i-2*L+1);j<=i;j++){s+=c[j].volume||0;k++;}return k?s/k:0;};
+  for(let i=L;i<n-L;i++){
+    let isHi=true,isLo=true;
+    for(let j=i-L;j<=i+L;j++){if(c[j].high>c[i].high)isHi=false;if(c[j].low<c[i].low)isLo=false;}
+    const born=i+L;
+    if(isLo&&plvl[i]!=null&&c[i].low>plvl[i])sup.push({price:c[i].low,vol:avgVol(i),born,crossed:false});
+    if(isHi&&plvl[i]!=null&&c[i].high<plvl[i])res.push({price:c[i].high,vol:avgVol(i),born,crossed:false});}
+  for(const lv of sup)for(let i=lv.born+1;i<n;i++){if(plvl[i]!=null&&plvl[i]>lv.price){lv.crossed=true;break;}}
+  for(const lv of res)for(let i=lv.born+1;i<n;i++){if(plvl[i]!=null&&plvl[i]<lv.price){lv.crossed=true;break;}}
+  return {sup:sup.filter(l=>!l.crossed).slice(-maxEach),res:res.filter(l=>!l.crossed).slice(-maxEach)};
+}
+
 /* ---------- signal engine ---------- */
 function signals(c){
   const closes=c.map(x=>x.close);
@@ -1039,8 +1102,10 @@ let wtchart,wt1s,wt2s,wtArea;
 let mchart,macdLine,macdSig,macdHist;
 /* two-pole oscillator pane + its price-chart stop levels */
 let tpochart,tpoLine,tpoSig,tpoBuyLine,tpoSellLine;
+/* volumatic VIDYA (price overlay) */
+let vidyaUp,vidyaDn,vidyaLines=[],vidyaInfo=null;
 /* indicator toggle state */
-const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false};
+const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false,vidya:false};
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
@@ -1073,6 +1138,9 @@ function initCharts(){
   // two-pole oscillator trailing stop levels (dashed, on the price pane)
   tpoBuyLine=pchart.addLineSeries({color:'#22d3ee',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
   tpoSellLine=pchart.addLineSeries({color:'#ff4dd2',lineWidth:2,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+  // volumatic VIDYA trend line (cyan in uptrend, magenta in downtrend)
+  vidyaUp=pchart.addLineSeries({color:'#22d3ee',lineWidth:3,priceLineVisible:false,lastValueVisible:false});
+  vidyaDn=pchart.addLineSeries({color:'#ff4dd2',lineWidth:3,priceLineVisible:false,lastValueVisible:false});
   rs=rchart.addLineSeries({color:'#5b8dff',lineWidth:2,priceLineVisible:false});
   rs.createPriceLine({price:70,color:'#ff4d6d',lineWidth:1,lineStyle:2,axisLabelVisible:true});
   rs.createPriceLine({price:30,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
@@ -1168,6 +1236,21 @@ function render(c,meta){
     tpoBuyLine.setData(gapData(disp,tpo.buyLine));tpoSellLine.setData(gapData(disp,tpo.sellLine));
     onTags.push('2POLE');}
   else {tpoLine.setData([]);tpoSig.setData([]);tpoLine.setMarkers([]);tpoBuyLine.setData([]);tpoSellLine.setData([]);}
+  // volumatic VIDYA (price overlay): trend line + flip dots + volume pivot levels
+  vidyaLines.forEach(l=>cs.removePriceLine(l));vidyaLines=[];vidyaInfo=null;
+  if(ind.vidya){const v=vidya(disp,34,20,2.0);
+    vidyaUp.setData(gapData(disp,v.line.map((x,i)=>v.col[i]>0?x:null)));
+    vidyaDn.setData(gapData(disp,v.line.map((x,i)=>v.col[i]<0?x:null)));
+    vidyaUp.setMarkers(v.flips.map(f=>({time:disp[f.i].time,position:f.up?'belowBar':'aboveBar',
+      color:f.up?'#22d3ee':'#ff4dd2',shape:f.up?'arrowUp':'arrowDown',text:''})).sort((a,b)=>a.time-b.time));
+    const lv=vidyaLevels(disp,v.plvl,3,4);
+    for(const sLv of lv.sup)vidyaLines.push(cs.createPriceLine({price:sLv.price,color:'#16c98a',lineWidth:1,
+      lineStyle:2,axisLabelVisible:true,title:'▲ '+fmtBig(sLv.vol)}));
+    for(const rLv of lv.res)vidyaLines.push(cs.createPriceLine({price:rLv.price,color:'#ff4d6d',lineWidth:1,
+      lineStyle:2,axisLabelVisible:true,title:'▼ '+fmtBig(rLv.vol)}));
+    const L=disp.length-1;vidyaInfo={up:v.upArr[L],dn:v.dnArr[L],delta:v.delta};
+    onTags.push('VIDYA 34');}
+  else {vidyaUp.setData([]);vidyaDn.setData([]);vidyaUp.setMarkers([]);}
   // support / resistance lines
   srLines.forEach(l=>cs.removePriceLine(l));srLines=[];
   if(ind.sr){for(const lv of srLevels(disp,5)){
@@ -1184,7 +1267,9 @@ function render(c,meta){
     }
     onTags.push('FIB');
   }
-  document.getElementById('pricelbl').textContent=(k===1?'PRICE':'MARKET CAP')+' · '+onTags.join(' · ');
+  let plbl=(k===1?'PRICE':'MARKET CAP')+' · '+onTags.join(' · ');
+  if(vidyaInfo)plbl+=`  ·  BUY ${fmtBig(vidyaInfo.up)} / SELL ${fmtBig(vidyaInfo.dn)} · Δ${vidyaInfo.delta>=0?'+':''}${(vidyaInfo.delta*100).toFixed(0)}%`;
+  document.getElementById('pricelbl').textContent=plbl;
   // markers on both panes — signal dots + my BUY/SELL "T" trade markers
   lastSigMarks=s.markers.map(m=>({time:m.time,position:m.position,color:m.color,shape:'circle',text:m.text}));
   lastTimes=c.map(x=>x.time);
