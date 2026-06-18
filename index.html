@@ -517,6 +517,7 @@
         <div class="ind" data-ind="macd">MACD</div>
         <div class="ind" data-ind="tpo">2-POLE</div>
         <div class="ind" data-ind="vidya">VIDYA</div>
+        <div class="ind on" data-ind="levels">SL / TP</div>
       </div>
 
       <div class="status" id="status">Search a token or paste a DexScreener link / pool address, then hit LOAD.</div>
@@ -1150,10 +1151,12 @@ let wtchart,wt1s,wt2s,wtArea;
 let mchart,macdLine,macdSig,macdHist;
 /* two-pole oscillator pane + its price-chart stop levels */
 let tpochart,tpoLine,tpoSig,tpoBuyLine,tpoSellLine;
-/* volumatic VIDYA (price overlay) */
-let vidyaUp,vidyaDn,vidyaLines=[],vidyaInfo=null;
+/* volumatic VIDYA (price overlay) + trend cloud */
+let vidyaUp,vidyaDn,vidyaAreaUp,vidyaAreaDn,vidyaLines=[],vidyaInfo=null;
+/* live signal/position SL-TP-entry levels on the price chart */
+let tradeLines=[];
 /* indicator toggle state */
-const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false,vidya:false};
+const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false,vidya:false,levels:true};
 /* active strategy: 'confluence' (multi-factor vote) or 'trend' (SuperTrend+EMA+MACD) */
 let STRAT='confluence';
 /* live/view state */
@@ -1171,6 +1174,11 @@ function initCharts(){
   // volume histogram on its own overlay scale (bottom 18% of price pane)
   vols=pchart.addHistogramSeries({priceScaleId:'vol',priceLineVisible:false,lastValueVisible:false});
   pchart.priceScale('vol').applyOptions({scaleMargins:{top:0.84,bottom:0}});
+  // VIDYA trend cloud — translucent fill that fades down from the line, behind candles
+  vidyaAreaUp=pchart.addAreaSeries({topColor:'rgba(34,211,238,0.20)',bottomColor:'rgba(34,211,238,0)',
+    lineColor:'rgba(0,0,0,0)',lineWidth:0,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  vidyaAreaDn=pchart.addAreaSeries({topColor:'rgba(205,150,225,0.18)',bottomColor:'rgba(205,150,225,0)',
+    lineColor:'rgba(0,0,0,0)',lineWidth:0,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
   // bollinger bands
   bbUp=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   bbLo=pchart.addLineSeries({color:'rgba(91,141,255,0.55)',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -1289,8 +1297,9 @@ function render(c,meta){
   // volumatic VIDYA (price overlay): trend line + flip dots + volume pivot levels
   vidyaLines.forEach(l=>cs.removePriceLine(l));vidyaLines=[];vidyaInfo=null;
   if(ind.vidya){const v=s.vid;
-    vidyaUp.setData(gapData(disp,v.line.map((x,i)=>v.col[i]>0?x:null)));
-    vidyaDn.setData(gapData(disp,v.line.map((x,i)=>v.col[i]<0?x:null)));
+    const upL=v.line.map((x,i)=>v.col[i]>0?x:null), dnL=v.line.map((x,i)=>v.col[i]<0?x:null);
+    vidyaUp.setData(gapData(disp,upL));vidyaDn.setData(gapData(disp,dnL));
+    vidyaAreaUp.setData(gapData(disp,upL));vidyaAreaDn.setData(gapData(disp,dnL));
     vidyaUp.setMarkers(v.flips.map(f=>({time:disp[f.i].time,position:f.up?'belowBar':'aboveBar',
       color:f.up?'#22d3ee':'#ff4dd2',shape:f.up?'arrowUp':'arrowDown',text:''})).sort((a,b)=>a.time-b.time));
     const lv=vidyaLevels(disp,v.plvl,3,4);
@@ -1300,7 +1309,24 @@ function render(c,meta){
       lineStyle:2,axisLabelVisible:true,title:'▼ '+fmtBig(rLv.vol)}));
     const L=disp.length-1;vidyaInfo={up:v.upArr[L],dn:v.dnArr[L],delta:v.delta};
     onTags.push('VIDYA 34');}
-  else {vidyaUp.setData([]);vidyaDn.setData([]);vidyaUp.setMarkers([]);}
+  else {vidyaUp.setData([]);vidyaDn.setData([]);vidyaUp.setMarkers([]);vidyaAreaUp.setData([]);vidyaAreaDn.setData([]);}
+  // live signal / open-position levels: entry, stop, 1.5R target
+  tradeLines.forEach(l=>cs.removePriceLine(l));tradeLines=[];
+  if(ind.levels){
+    let L=null;
+    const ph=STATE.positions.find(p=>p.token===tokenId());
+    if(ph&&(ph.sl||ph.tp))L={entry:ph.entry*k,sl:ph.sl?ph.sl*k:null,tp:ph.tp?ph.tp*k:null,be:ph.be,open:true};
+    else{const m=s.markers[s.markers.length-1];
+      if(m&&(m.sl||m.tp))L={entry:disp[m._i]?disp[m._i].close:null,sl:m.sl,tp:m.tp,open:false};}
+    if(L){
+      if(L.entry)tradeLines.push(cs.createPriceLine({price:L.entry,color:'#cbd5e1',lineWidth:1,lineStyle:2,
+        axisLabelVisible:true,title:L.open?'ENTRY':'SIGNAL'}));
+      if(L.sl)tradeLines.push(cs.createPriceLine({price:L.sl,color:'#ff4d6d',lineWidth:2,lineStyle:0,
+        axisLabelVisible:true,title:L.be?'STOP · BE':'STOP'}));
+      if(L.tp)tradeLines.push(cs.createPriceLine({price:L.tp,color:'#16c98a',lineWidth:2,lineStyle:0,
+        axisLabelVisible:true,title:'TP 1.5R'}));
+    }
+  }
   // support / resistance lines
   srLines.forEach(l=>cs.removePriceLine(l));srLines=[];
   if(ind.sr){for(const lv of srLevels(disp,5)){
