@@ -1203,9 +1203,21 @@ let STRAT='confluence';
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
 function initCharts(){
   if(ready)return;
+  // Lightweight Charts renders the time axis in UTC by default; format ticks &
+  // the crosshair tooltip in the viewer's LOCAL timezone instead.
+  const pad2=n=>String(n).padStart(2,'0');
+  const fmtAxis=(t,type)=>{const d=new Date(t*1000);
+    if(type<=0)return String(d.getFullYear());
+    if(type===1)return d.toLocaleString([],{month:'short'});
+    if(type===2)return d.toLocaleString([],{month:'short',day:'numeric'});
+    return pad2(d.getHours())+':'+pad2(d.getMinutes());};
+  const fmtCross=t=>{const d=new Date(t*1000);
+    return d.toLocaleDateString([],{month:'short',day:'numeric'})+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());};
   const common={layout:{background:{color:'transparent'},textColor:'#727e8f',fontFamily:'"IBM Plex Mono",ui-monospace,monospace'},
     grid:{vertLines:{color:'rgba(40,49,63,0.35)'},horzLines:{color:'rgba(40,49,63,0.35)'}},
-    rightPriceScale:{borderColor:'#1a2130'},timeScale:{borderColor:'#1a2130',timeVisible:true,secondsVisible:false},
+    rightPriceScale:{borderColor:'#1a2130'},
+    timeScale:{borderColor:'#1a2130',timeVisible:true,secondsVisible:false,tickMarkFormatter:fmtAxis},
+    localization:{timeFormatter:fmtCross},
     crosshair:{vertLine:{color:'rgba(58,160,255,0.6)'},horzLine:{color:'rgba(58,160,255,0.6)'}}};
   pchart=LightweightCharts.createChart(document.getElementById('price'),{...common,autosize:true});
   rchart=LightweightCharts.createChart(document.getElementById('rsi'),{...common,autosize:true});
@@ -1294,7 +1306,7 @@ function render(c,meta){
   e9s.setData(lineData(disp,s.e9));
   e21s.setData(lineData(disp,s.e21));
   e50s.setData(lineData(disp,s.e50));
-  rs.setData(lineData(disp,s.r));
+  rs.setData(gapData(disp,s.r));
   const onTags=['EMA 9/21/50'];
   // volume bars (raw size, colored by candle direction)
   if(ind.vol){vols.setData(disp.map(x=>({time:x.time,value:x.volume||0,
@@ -1311,7 +1323,7 @@ function render(c,meta){
   else {projMid.setData([]);projUp.setData([]);projLo.setData([]);}
   // wavetrend (scale-invariant oscillator in its own pane)
   if(ind.wt){const wt=waveTrend(disp,10,21);
-    wt1s.setData(lineData(disp,wt.wt1));wt2s.setData(lineData(disp,wt.wt2));
+    wt1s.setData(gapData(disp,wt.wt1));wt2s.setData(gapData(disp,wt.wt2));
     wt1s.setMarkers(wt.dots.map(d=>({time:d.time,position:d.up?'belowBar':'aboveBar',
       color:d.up?'#16ff9e':'#ff4d6d',shape:'circle',text:''})));
     onTags.push('WT');}
@@ -1321,13 +1333,13 @@ function render(c,meta){
   else vwapS.setData([]);
   // MACD (own pane)
   if(ind.macd){const md=macd(disp.map(x=>x.close));
-    macdLine.setData(lineData(disp,md.line));macdSig.setData(lineData(disp,md.signal));
+    macdLine.setData(gapData(disp,md.line));macdSig.setData(gapData(disp,md.signal));
     macdHist.setData(disp.map((x,i)=>md.hist[i]==null?null:{time:x.time,value:md.hist[i],
       color:md.hist[i]>=0?'rgba(22,201,138,0.55)':'rgba(255,77,109,0.55)'}).filter(Boolean));}
   else {macdLine.setData([]);macdSig.setData([]);macdHist.setData([]);}
   // two-pole oscillator (BigBeluga)
   if(ind.tpo){const tpo=s.tpo;
-    tpoSig.setData(lineData(disp,tpo.tpp));tpoLine.setData(lineData(disp,tpo.tp));
+    tpoSig.setData(gapData(disp,tpo.tpp));tpoLine.setData(gapData(disp,tpo.tp));
     const dots=[];
     tpo.buys.forEach(i=>dots.push({time:disp[i].time,position:'belowBar',color:'#22d3ee',shape:'circle',text:''}));
     tpo.sells.forEach(i=>dots.push({time:disp[i].time,position:'aboveBar',color:'#ff4dd2',shape:'circle',text:''}));
