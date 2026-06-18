@@ -968,6 +968,10 @@ function signals(c){
   const closes=c.map(x=>x.close);
   const e9=ema(closes,9),e21=ema(closes,21),e50=ema(closes,50),e200=ema(closes,200);
   const r=rsi(closes,14),ax=adx(c,14),at=atr(c,14),div=rsiDivergence(c,r,60,2);
+  // BigBeluga confluence: Two-Pole crosses + VIDYA trend flips
+  const tpo=twoPole(c,20), vid=vidya(c,34,20,2.0);
+  const vUp=new Set(),vDn=new Set();
+  vid.flips.forEach(f=>(f.up?vUp:vDn).add(f.i));
   const markers=[];let pos='flat',last=-5;
   const vavg=i=>{let s=0,n=0;for(let j=Math.max(0,i-20);j<i;j++){s+=c[j].volume;n++;}return n?s/n:0;};
   for(let i=2;i<c.length;i++){
@@ -977,16 +981,22 @@ function signals(c){
       emaReclaim:closes[i-1]<e21[i-1]&&closes[i]>e21[i],
       emaCross:e9[i-1]!=null&&e21[i-1]!=null&&e9[i-1]<=e21[i-1]&&e9[i]>e21[i],
       volSpike:c[i].close>c[i].open&&av>0&&c[i].volume>av*1.6,
-      bullDiv:div.bull.has(i)};
+      bullDiv:div.bull.has(i),
+      tpoBuy:tpo.buys.has(i),
+      vidyaUp:vUp.has(i)};
     const sf={rsiOB:r[i-1]>70&&r[i]<=70,
       emaLose:closes[i-1]>e21[i-1]&&closes[i]<e21[i],
       emaXdn:e9[i-1]!=null&&e9[i-1]>=e21[i-1]&&e9[i]<e21[i],
       volSpikeDn:c[i].close<c[i].open&&av>0&&c[i].volume>av*1.6,
-      bearDiv:div.bear.has(i)};
+      bearDiv:div.bear.has(i),
+      tpoSell:tpo.sells.has(i),
+      vidyaDn:vDn.has(i)};
     const buy=Object.values(bf).filter(Boolean).length;
     const sell=Object.values(sf).filter(Boolean).length;
-    // higher-timeframe trend + ADX context: don't fight a strong established trend
-    const trend=(e200[i]!=null)?(closes[i]>e200[i]?1:-1):0;
+    // trend gate: prefer VIDYA's adaptive trend; fall back to 200-EMA. ADX adds
+    // conviction — don't fire against a strong established trend.
+    const trend=(vid.trendUp[i]!=null)?(vid.trendUp[i]?1:-1)
+               :(e200[i]!=null?(closes[i]>e200[i]?1:-1):0);
     const strong=(ax[i]!=null&&ax[i]>25);
     const blockBuy=strong&&trend<0, blockSell=strong&&trend>0;
     const a=at[i]||0, entry=closes[i];
@@ -1001,7 +1011,7 @@ function signals(c){
         atr:a,sl:a?entry+1.5*a:null,tp:a?entry-2.6*a:null,adx:ax[i]==null?null:+ax[i].toFixed(0),trend});
       pos='flat';last=i;
     }}
-  return {e9,e21,e50,e200,r,adx:ax,atr:at,markers,pos};
+  return {e9,e21,e50,e200,r,adx:ax,atr:at,markers,pos,tpo,vid};
 }
 
 /* ---------- data ---------- */
@@ -1227,7 +1237,7 @@ function render(c,meta){
       color:md.hist[i]>=0?'rgba(22,201,138,0.55)':'rgba(255,77,109,0.55)'}).filter(Boolean));}
   else {macdLine.setData([]);macdSig.setData([]);macdHist.setData([]);}
   // two-pole oscillator (BigBeluga)
-  if(ind.tpo){const tpo=twoPole(disp,20);
+  if(ind.tpo){const tpo=s.tpo;
     tpoSig.setData(lineData(disp,tpo.tpp));tpoLine.setData(lineData(disp,tpo.tp));
     const dots=[];
     tpo.buys.forEach(i=>dots.push({time:disp[i].time,position:'belowBar',color:'#22d3ee',shape:'circle',text:''}));
@@ -1238,7 +1248,7 @@ function render(c,meta){
   else {tpoLine.setData([]);tpoSig.setData([]);tpoLine.setMarkers([]);tpoBuyLine.setData([]);tpoSellLine.setData([]);}
   // volumatic VIDYA (price overlay): trend line + flip dots + volume pivot levels
   vidyaLines.forEach(l=>cs.removePriceLine(l));vidyaLines=[];vidyaInfo=null;
-  if(ind.vidya){const v=vidya(disp,34,20,2.0);
+  if(ind.vidya){const v=s.vid;
     vidyaUp.setData(gapData(disp,v.line.map((x,i)=>v.col[i]>0?x:null)));
     vidyaDn.setData(gapData(disp,v.line.map((x,i)=>v.col[i]<0?x:null)));
     vidyaUp.setMarkers(v.flips.map(f=>({time:disp[f.i].time,position:f.up?'belowBar':'aboveBar',
