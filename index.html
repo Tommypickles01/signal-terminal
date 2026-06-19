@@ -649,6 +649,7 @@
         <span class="sep"></span>
         <button class="btn live" id="live">● LIVE</button>
         <button class="btn live" id="embed">DEX ⧉</button>
+        <button class="btn" id="aibtn" style="background:#5b8dff;color:#02060f">🧠 AI ANALYZE</button>
       </div>
 
       <div class="indrow" id="indrow">
@@ -674,6 +675,7 @@
         <div class="lgd"><span class="f">— EMA9 (fast)</span><br><span class="sw">— EMA21/50 (slow)</span></div>
         <div id="price"></div>
         <div id="sigglow"></div>
+        <canvas id="aiOverlay" style="position:absolute;inset:0;pointer-events:none;z-index:5"></canvas>
       </div>
       <div class="chartwrap" id="embedwrap" style="display:none">
         <div class="lbl">DEXSCREENER · LIVE (tick)</div>
@@ -1357,6 +1359,7 @@ const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,m
 let STRAT='confluence';
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
+let aiCandles=[],aiShapes={levels:[],zones:[],trendlines:[]},aiOv,aiCtx;
 function initCharts(){
   if(ready)return;
   // Lightweight Charts renders the time axis in UTC by default; format ticks &
@@ -1444,13 +1447,13 @@ function initCharts(){
   charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
     if(!r||syncing)return;syncing=true;
     charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
-  pchart.timeScale().subscribeVisibleLogicalRangeChange(()=>positionGlows());
+  pchart.timeScale().subscribeVisibleLogicalRangeChange(()=>{positionGlows();drawAI();});
   // price & rsi use autosize; wt + macd are fixed-height (start hidden) so keep their width in sync
   new ResizeObserver(()=>{const pw=document.getElementById('price').clientWidth;
     if(pw&&document.getElementById('wtwrap').style.display!=='none')wtchart.applyOptions({width:pw});
     if(pw&&document.getElementById('macdwrap').style.display!=='none')mchart.applyOptions({width:pw});
     if(pw&&document.getElementById('tpowrap').style.display!=='none')tpochart.applyOptions({width:pw});
-    if(pw&&document.getElementById('srsiwrap').style.display!=='none')srsichart.applyOptions({width:pw});})
+    if(pw&&document.getElementById('srsiwrap').style.display!=='none')srsichart.applyOptions({width:pw});drawAI();})
     .observe(document.getElementById('price'));
   ready=true;
 }
@@ -1465,6 +1468,7 @@ function render(c,meta){
   // axis labels: abbreviated $ (12.43M) in MCap mode, fine-grained price otherwise
   pchart.applyOptions({localization:{priceFormatter:v=>k===1?fmtPrice(v):fmtBig(v)}});
   const disp=k===1?c:c.map(x=>({time:x.time,open:x.open*k,high:x.high*k,low:x.low*k,close:x.close*k,volume:x.volume}));
+  aiCandles=disp;
   const s=signals(disp);
   cs.setData(disp);
   e9s.setData(lineData(disp,s.e9));
@@ -1583,6 +1587,7 @@ function render(c,meta){
   lastSigMarks=s.markers.map(m=>({time:m.time,position:m.position,color:m.color,shape:'circle',text:m.text}));
   lastTimes=c.map(x=>x.time);
   applyMarkers();
+  drawAI();
   rs.setMarkers(s.markers.map(m=>({time:m.time,position:m.position==='belowBar'?'belowBar':'aboveBar',color:m.color,shape:'circle',text:''})));
   // readouts
   const last=c[c.length-1],r=s.r[s.r.length-1];
@@ -1640,6 +1645,7 @@ async function load(){
     if(!c.length){setStatus('no candle data for that pool/timeframe. Make sure it\'s a POOL/PAIR address (the dexscreener page url), not the token mint, and the right chain is selected.',true);return;}
     const meta=metaFromPair(pair);
     candlesRaw=c; metaCur=meta; supply=(meta&&meta.supply)||0;
+    aiShapes={levels:[],zones:[],trendlines:[]};
     dsUrl=(meta&&meta.url)||'';
     syncEmbed();
     render(candlesRaw,metaCur);
@@ -2069,6 +2075,74 @@ function positionGlows(){
   });
 }
 setInterval(positionGlows,4000);
+
+/* ---------- AI analysis overlay (Claude-drawn levels, zones, trendlines) ---------- */
+aiOv=document.getElementById('aiOverlay'); aiCtx=aiOv&&aiOv.getContext('2d');
+function aiHexA(hex,a){const m=(hex||'#5b8dff').replace('#','');
+  const n=m.length===3?m.split('').map(x=>x+x).join(''):m;
+  const r=parseInt(n.slice(0,2),16),g=parseInt(n.slice(2,4),16),b=parseInt(n.slice(4,6),16);
+  return `rgba(${r||90},${g||141},${b||255},${a})`;}
+function aiXIndex(i,ts){const n=aiCandles.length;if(!n)return null;
+  const k=Math.max(0,Math.min(n-1,i|0));return ts.timeToCoordinate(aiCandles[k].time);}
+function drawAI(){
+  if(!aiOv||!aiCtx||!ready||!pchart||!cs)return;
+  const wrap=document.getElementById('pricewrap'),pe=document.getElementById('price');
+  if(!wrap||!pe)return;
+  const W=wrap.clientWidth,H=wrap.clientHeight,dpr=window.devicePixelRatio||1;
+  aiOv.width=W*dpr;aiOv.height=H*dpr;aiOv.style.width=W+'px';aiOv.style.height=H+'px';
+  aiCtx.setTransform(dpr,0,0,dpr,0,0);aiCtx.clearRect(0,0,W,H);
+  const pr=pe.getBoundingClientRect(),wr=wrap.getBoundingClientRect();
+  const dx=pr.left-wr.left,dy=pr.top-wr.top,pw=pe.clientWidth,ts=pchart.timeScale();
+  aiCtx.font='10px ui-monospace,monospace';
+  for(const z of aiShapes.zones){
+    const yH=cs.priceToCoordinate(Math.max(z.priceHigh,z.priceLow));
+    const yL=cs.priceToCoordinate(Math.min(z.priceHigh,z.priceLow));
+    if(yH==null||yL==null)continue;
+    let x1=z.startIndex!=null?aiXIndex(z.startIndex,ts):0; if(x1==null)x1=0;
+    let x2=z.endIndex!=null?aiXIndex(z.endIndex,ts):pw; if(x2==null)x2=pw;
+    const c=z.color||'#5b8dff',X=dx+Math.min(x1,x2),Y=dy+yH,Wd=Math.max(2,Math.abs(x2-x1)),Ht=Math.max(2,yL-yH);
+    aiCtx.fillStyle=aiHexA(c,0.13);aiCtx.fillRect(X,Y,Wd,Ht);
+    aiCtx.strokeStyle=aiHexA(c,0.7);aiCtx.lineWidth=1;aiCtx.strokeRect(X,Y,Wd,Ht);
+    if(z.label){aiCtx.fillStyle=c;aiCtx.fillText(z.label,X+4,Y+12);}
+  }
+  for(const lv of aiShapes.levels){
+    const y=cs.priceToCoordinate(lv.price);if(y==null)continue;
+    const c=lv.color||'#ffb020',Y=dy+y;
+    aiCtx.strokeStyle=c;aiCtx.lineWidth=1;aiCtx.setLineDash(lv.style==='solid'?[]:[5,4]);
+    aiCtx.beginPath();aiCtx.moveTo(dx,Y);aiCtx.lineTo(dx+pw,Y);aiCtx.stroke();aiCtx.setLineDash([]);
+    if(lv.label){const tw=aiCtx.measureText(lv.label).width;
+      aiCtx.fillStyle=aiHexA(c,0.18);aiCtx.fillRect(dx+pw-tw-10,Y-12,tw+8,13);
+      aiCtx.fillStyle=c;aiCtx.fillText(lv.label,dx+pw-tw-6,Y-2);}
+  }
+  for(const t of aiShapes.trendlines){
+    const x1=aiXIndex(t.startIndex,ts),x2=aiXIndex(t.endIndex,ts);
+    const y1=cs.priceToCoordinate(t.startPrice),y2=cs.priceToCoordinate(t.endPrice);
+    if(x1==null||x2==null||y1==null||y2==null)continue;
+    const c=t.color||'#16ff9e';
+    aiCtx.strokeStyle=c;aiCtx.lineWidth=1.5;aiCtx.beginPath();aiCtx.moveTo(dx+x1,dy+y1);aiCtx.lineTo(dx+x2,dy+y2);aiCtx.stroke();
+    if(t.label){aiCtx.fillStyle=c;aiCtx.fillText(t.label,dx+x2-aiCtx.measureText(t.label).width,dy+y2-4);}
+  }
+}
+function showAI(d){
+  aiShapes={levels:d.levels||[],zones:d.zones||[],trendlines:d.trendlines||[]};
+  drawAI();
+  const b=(d.bias||'neutral').toUpperCase();
+  setStatus('🧠 AI '+b+' — '+(d.summary||'')+'  ('+(d.levels?.length||0)+' levels · '+(d.zones?.length||0)+' zones · '+(d.trendlines?.length||0)+' trendlines)',false);
+}
+async function runAI(){
+  if(!aiCandles||!aiCandles.length){setStatus('load a chart first',true);return;}
+  setStatus('asking AI for analysis…',false);
+  try{
+    const payload={pair:(document.getElementById('m-pair')||{}).textContent||'token',tf:(typeof curTF!=='undefined'?curTF:''),
+      candles:aiCandles.map(c=>({o:c.open,h:c.high,l:c.low,c:c.close,v:c.volume}))};
+    const r=await fetch('https://signal-terminal-ai-tp.netlify.app/.netlify/functions/analyze',
+      {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error('backend '+r.status);
+    const d=await r.json();if(d.error)throw new Error(d.error);
+    showAI(d);
+  }catch(e){setStatus('AI call failed: '+e.message,true);}
+}
+{const _b=document.getElementById('aibtn');if(_b)_b.addEventListener('click',runAI);}
 function startTitleFlash(msg){
   stopTitleFlash();
   if(document.hasFocus())return;  // tab already visible — the cell glow is enough
