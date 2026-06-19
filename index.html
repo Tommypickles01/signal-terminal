@@ -6,28 +6,28 @@
 <title>DEGEN SIGNAL TERMINAL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <script>window.LightweightCharts||document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
-    --bg:#05070b;
-    --panel:#0a0e15;
-    --panel2:#0f1420;
-    --line:#1a2130;
-    --line2:#28313f;       /* brighter hairline / hover */
-    --txt:#e9eef5;
-    --dim:#727e8f;
-    --buy:#1fe08a;         /* electric green */
-    --sell:#ff4d6d;
-    --fast:#ffb020;   /* fast EMA - amber, like your yellow line */
-    --slow:#dfe6ee;   /* slow EMA - off white */
-    --mid:#3aa0ff;    /* fib / mid / info accent */
-    --amber:#ffb020;
-    --glow-buy:rgba(31,224,138,.38);
-    --glow-sell:rgba(255,77,109,.34);
-    --display:"Chakra Petch","Arial Black","Helvetica Neue",sans-serif;
+    --bg:#120c2e;          /* deep indigo well */
+    --panel:#2a2150;       /* raised menu-box face */
+    --panel2:#1c1442;      /* inset well */
+    --line:#3a2e6e;
+    --line2:#5d4ca8;       /* bright bevel / hover */
+    --txt:#e9e4ff;
+    --dim:#9b8fd0;
+    --buy:#43f59b;         /* neon mint */
+    --sell:#ff4d8d;        /* hot pink */
+    --fast:#ffd24a;   /* fast EMA - gold */
+    --slow:#e9e4ff;   /* slow EMA - off white */
+    --mid:#51e0ff;    /* fib / info accent - cyan */
+    --amber:#ffd24a;
+    --glow-buy:rgba(67,245,155,.5);
+    --glow-sell:rgba(255,77,141,.5);
+    --display:"Press Start 2P","Chakra Petch",monospace;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
@@ -104,12 +104,12 @@
   @keyframes sigflashS{0%{box-shadow:0 0 0 0 rgba(255,77,109,0)}12%{box-shadow:0 0 20px 5px var(--glow-sell);background:rgba(255,77,109,.16)}100%{box-shadow:0 0 0 0 rgba(255,77,109,0);background:transparent}}
   .sig-flash-buy{animation:sigflashB 1s ease-out 5;border-radius:7px;padding:1px 5px;margin:-1px -5px}
   .sig-flash-sell{animation:sigflashS 1s ease-out 5;border-radius:7px;padding:1px 5px;margin:-1px -5px}
-  /* live signal glow dots on the price chart (pulse ~5min, then dull) */
+  /* live signal glow dots on the price chart (pulse ~2min, then dull) */
   #sigglow{position:absolute;inset:0;pointer-events:none;z-index:4;overflow:hidden}
   .sgd{position:absolute;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);
     transition:opacity .8s ease,box-shadow .8s ease}
-  .sgd.buy{background:#16ff9e;box-shadow:0 0 12px 3px rgba(22,255,158,.85)}
-  .sgd.sell{background:#ff4d6d;box-shadow:0 0 12px 3px rgba(255,77,109,.85)}
+  .sgd.buy{background:#43f59b;box-shadow:0 0 12px 3px rgba(22,255,158,.85)}
+  .sgd.sell{background:#ff4d8d;box-shadow:0 0 12px 3px rgba(255,77,109,.85)}
   .sgd::after{content:"";position:absolute;inset:-4px;border-radius:50%}
   .sgd.buy::after{border:2px solid rgba(22,255,158,.7);animation:sgpulse 1.5s ease-out infinite}
   .sgd.sell::after{border:2px solid rgba(255,77,109,.7);animation:sgpulse 1.5s ease-out infinite}
@@ -241,12 +241,12 @@
   .wl:hover{background:var(--panel2);border-color:var(--line)}
   .wl.active{background:var(--panel2);border-color:var(--mid)}
   .wl .ic{width:22px;height:22px;border-radius:6px;flex:0 0 auto;overflow:hidden;
-    background:linear-gradient(135deg,#2b3550,#0f1622);display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#3a2e6e,#171036);display:flex;align-items:center;justify-content:center;
     font-size:10px;font-weight:800;color:var(--mid)}
   /* token icons pulled from DexScreener/pump.fun image metadata */
   .wl .ic img,.tokbar .tk .ic img{width:100%;height:100%;object-fit:cover;display:block}
   .res .ic{width:22px;height:22px;border-radius:6px;flex:0 0 auto;overflow:hidden;
-    background:linear-gradient(135deg,#2b3550,#0f1622);display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#3a2e6e,#171036);display:flex;align-items:center;justify-content:center;
     font-size:10px;font-weight:800;color:var(--mid)}
   .res .ic img{width:100%;height:100%;object-fit:cover;display:block}
   .wl .nm{min-width:0}
@@ -263,7 +263,7 @@
     border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px}
   .tokbar .tk{display:flex;align-items:center;gap:9px}
   .tokbar .tk .ic{width:30px;height:30px;border-radius:8px;overflow:hidden;
-    background:linear-gradient(135deg,#2b3550,#0f1622);display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#3a2e6e,#171036);display:flex;align-items:center;justify-content:center;
     font-size:12px;font-weight:800;color:var(--mid)}
   .tokbar .tk .nm{font-size:14px;font-weight:800;max-width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .tokbar .tk .px-sub{font-size:10px;color:var(--dim);margin-top:1px}
@@ -436,6 +436,104 @@
     border-color:var(--hair)}
   /* buttons/pills: smoother, less neon, more refined */
   .pill,.ind,.tog,.unit,.bs-tab,.btn,.tp-go{transition:transform .16s cubic-bezier(.2,.7,.2,1),background .16s,border-color .16s,color .16s,box-shadow .16s}
+
+  /* ===================================================================
+     16-BIT PIXEL SKIN  — square corners, beveled menu boxes, neon palette,
+     pixel display type. Layered last so it wins; restyles existing classes.
+     =================================================================== */
+  :root{--r:0px;--r-sm:0px;--ink:#0e0a26;--bvl:#5d4ca8;--bvd:#0e0a26;}
+  /* square every corner — pixel sprites have no radii */
+  *{border-radius:0!important}
+  /* kill glassy blur + soft ambient depth (un-pixel) */
+  .topnav,.statusbar,.chartwrap,.results,.nav-bal{backdrop-filter:none!important}
+  /* page atmosphere: indigo gradient + dot-matrix dither */
+  body::before{background:
+    radial-gradient(760px 480px at 84% -12%,rgba(67,245,155,.07),transparent 60%),
+    radial-gradient(720px 480px at 2% 0%,rgba(81,224,255,.06),transparent 55%),
+    linear-gradient(180deg,#1b1247 0%,#120c2e 58%,#0d0820 100%)!important}
+  body::after{opacity:.06!important;mix-blend-mode:normal!important;
+    background-image:radial-gradient(rgba(255,255,255,.55) 1px,transparent 1px)!important;
+    background-size:7px 7px!important}
+  img,.brand-logo,.wl .ic,.tokbar .tk .ic,.res .ic{image-rendering:pixelated}
+  .wl .ic,.tokbar .tk .ic,.res .ic{background:linear-gradient(135deg,#3a2e6e,#171036)!important;color:var(--mid)!important}
+
+  /* ---- RAISED MENU BOXES ---- */
+  .controls,.sect,.sidebar,.tradepanel,.tokbar,.tradebar,.nav-bal{
+    background:var(--panel)!important;background-image:none!important;
+    border:2px solid var(--ink)!important;
+    box-shadow:inset 2px 2px 0 var(--bvl),inset -2px -2px 0 var(--bvd),0 4px 0 var(--bvd)!important}
+  /* ---- DARK CHART WELLS ---- */
+  .chartwrap{background:#120c2e!important;background-image:none!important;padding:6px!important;
+    border:2px solid var(--ink)!important;
+    box-shadow:inset 2px 2px 0 var(--bvd),inset -1px -1px 0 var(--bvl)!important}
+  #price,#rsi,#wt,#macd,#tpo,#equity{box-shadow:none!important}
+  /* ---- INSET WELLS (cells, inputs, sub-cards) ---- */
+  .cell,.stat,.tp-stats .st,.results,.poscard,.sql,
+  .controls input,.controls select,.searchbox input,.frm input,.tradebar input,.tp-row input,.tbl input.note-in,.chartctl input,#chain{
+    background:var(--panel2)!important;background-image:none!important;
+    border:2px solid var(--ink)!important;
+    box-shadow:inset 2px 2px 0 var(--bvd),inset -1px -1px 0 var(--bvl)!important}
+  .cell:hover,.stat:hover{transform:none!important}
+
+  /* ---- PIXEL DISPLAY TYPE ---- */
+  .brand-txt{font-size:12px!important;letter-spacing:1px!important}
+  .tab{font-family:var(--display)!important;font-size:9px!important;padding:18px 9px!important;letter-spacing:.5px!important}
+  .tab.on::after{height:3px!important;box-shadow:0 0 10px var(--glow-buy)!important}
+  .sect h3{font-family:var(--display)!important;font-size:9px!important;line-height:1.7!important}
+  .wl-head{font-family:var(--display)!important;font-size:8px!important}
+  .tokbar .tk .nm{font-family:var(--display)!important;font-size:11px!important}
+  .bs-tab{font-family:var(--display)!important;font-size:10px!important}
+  .tp-go{font-family:var(--display)!important;font-size:11px!important;letter-spacing:1px!important;padding:14px 6px!important}
+  .btn{font-family:var(--display)!important;font-size:9px!important;letter-spacing:1px!important;padding:11px 14px!important;line-height:1!important;height:auto!important;display:inline-flex;align-items:center;justify-content:center}
+  /* big readouts in VT323 — arcade scoreboard */
+  .nav-bal .nb-v{font-family:"VT323",monospace!important;font-size:21px!important;letter-spacing:.5px}
+  .nav-stat .ns-v{font-family:"VT323",monospace!important;font-size:17px!important}
+  .cell .v,.tokbar .m .v{font-family:"VT323",monospace!important;font-size:20px!important;letter-spacing:.5px}
+  .stat .v{font-family:"VT323",monospace!important;font-size:26px!important;letter-spacing:.5px}
+  .tp-stats .st .v{font-family:"VT323",monospace!important;font-size:18px!important}
+  .tokbar .tk .px-sub{font-family:"VT323",monospace!important;font-size:15px!important}
+  .poscard .row{font-family:"VT323",monospace!important;font-size:16px!important}
+
+  /* ---- PIXEL BUTTONS / CONTROLS ---- */
+  .pill,.ind,.tog,.unit,.quick div,.mini,.closebtn,.btn.live,.btn.ghost,.bs-tab,.bs-tab.buy,.bs-tab.sell,#crt-btn{
+    background:var(--panel2)!important;background-image:none!important;color:var(--dim)!important;
+    border:2px solid var(--ink)!important;
+    box-shadow:inset 1px 1px 0 var(--bvl),inset -2px -2px 0 var(--bvd)!important;transform:none!important}
+  /* primary green action buttons (LOAD, SAVE, BUY) */
+  .btn,.tp-go.buy{background:var(--buy)!important;color:var(--ink)!important;border:2px solid var(--ink)!important;
+    box-shadow:inset 2px 2px 0 #9dffce,inset -2px -2px 0 #1c8a58,0 4px 0 #0c3a22!important}
+  .tp-go.sell{background:var(--sell)!important;color:#fff!important;border:2px solid var(--ink)!important;
+    box-shadow:inset 2px 2px 0 #ffb3d0,inset -2px -2px 0 #a82a5a,0 4px 0 #5a1430!important}
+  /* active / on states */
+  .pill.on,.ind.on,.unit.on{background:var(--mid)!important;color:var(--ink)!important;
+    box-shadow:inset 2px 2px 0 #b6f0ff,inset -2px -2px 0 #1f7e96!important}
+  .tog.on,.bs-tab.buy.on{background:var(--buy)!important;color:var(--ink)!important;
+    box-shadow:inset 2px 2px 0 #9dffce,inset -2px -2px 0 #1c8a58!important}
+  .bs-tab.sell.on{background:var(--sell)!important;color:#fff!important;
+    box-shadow:inset 2px 2px 0 #ffb3d0,inset -2px -2px 0 #a82a5a!important}
+  .btn.live.on{background:var(--sell)!important;color:#fff!important;
+    box-shadow:inset 2px 2px 0 #ffb3d0,inset -2px -2px 0 #a82a5a!important}
+  body.crt #crt-btn,#crt-btn:hover{color:var(--mid)!important}
+  /* tactile press: shove down into the bevel */
+  .btn:active,.pill:active,.ind:active,.tog:active,.unit:active,.tp-go:active,.bs-tab:active,.quick div:active,.mini:active,.closebtn:active,#crt-btn:active{
+    transform:translate(2px,2px)!important;box-shadow:inset 1px 1px 0 var(--bvd)!important}
+  /* keep hover from lifting (pixel UIs don't float) */
+  .btn:hover,.tp-go:hover{transform:none!important;filter:brightness(1.08)}
+
+  /* ---- signal blips: square pixel dots ---- */
+  .sgd.buy{background:#43f59b!important;box-shadow:0 0 10px 2px rgba(67,245,155,.85)!important}
+  .sgd.sell{background:#ff4d8d!important;box-shadow:0 0 10px 2px rgba(255,77,141,.85)!important}
+  .sgd.buy::after{border-color:rgba(67,245,155,.7)!important}
+  .sgd.sell::after{border-color:rgba(255,77,141,.7)!important}
+  .sb-dot{box-shadow:0 0 8px var(--glow-buy)!important}
+
+  /* ---- optional CRT scanline overlay (toggle via CRT button) ---- */
+  #crtlay{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:0;transition:opacity .2s;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.24) 0 1px,transparent 1px 3px);
+    box-shadow:inset 0 0 170px 34px rgba(0,0,0,.55)}
+  body.crt #crtlay{opacity:1}
+  body.crt{animation:crtflick 5.5s linear infinite}
+  @keyframes crtflick{0%,100%{filter:none}48%{filter:brightness(1.025)}52%{filter:brightness(.99)}}
 </style>
 </head>
 <body>
@@ -453,6 +551,7 @@
       <div class="tab" data-tab="settings">Settings</div>
     </nav>
     <div class="nav-right">
+      <button id="crt-btn" class="ind" title="Toggle CRT scanline mode" onclick="document.body.classList.toggle('crt');try{localStorage.setItem('px_crt',document.body.classList.contains('crt')?'1':'0')}catch(e){}">CRT</button>
       <div class="nav-stat"><span class="ns-k">SOL/USD</span><span class="ns-v" id="nav-sol">$—</span></div>
       <div class="nav-bal">
         <span class="nb-k">Equity</span>
@@ -2513,5 +2612,6 @@ fetchSol();setInterval(fetchSol,60000);
 renderWatchlist();
 refreshAllUI();
 </script>
+<script>try{if(localStorage.getItem('px_crt')==='1')document.body.classList.add('crt')}catch(e){}</script>
 </body>
 </html>
