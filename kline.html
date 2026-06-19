@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>DEGEN SIGNAL TERMINAL · KLineCharts</title>
+<script src="https://cdn.jsdelivr.net/npm/klinecharts@9/dist/umd/klinecharts.min.js"></script>
+<style>
+  :root{
+    --bg:#070809; --panel:#0d0f13; --panel2:#11141a; --line:#1c212b;
+    --txt:#e8edf2; --dim:#7b8794; --buy:#16ff9e; --sell:#ff4d6d;
+    --fast:#ffb020; --slow:#dfe6ee; --mid:#5b8dff; --amber:#ffb020;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;}
+  body{padding:12px;max-width:1100px;margin:0 auto;}
+  .head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .logo{font-weight:800;font-size:18px;letter-spacing:.5px;font-family:"Arial Black","Helvetica Neue",sans-serif}
+  .logo .b{color:var(--buy)} .logo .s{color:var(--sell)}
+  .tag{font-size:10px;color:var(--dim);border:1px solid var(--line);border-radius:999px;
+    padding:3px 8px;text-transform:uppercase;letter-spacing:1px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;background:var(--panel);
+    border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+  .controls input,.controls select{background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);border-radius:8px;padding:9px 10px;font:inherit;font-size:13px}
+  .controls input{flex:1;min-width:200px}
+  .tfgroup{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+    border-radius:8px;padding:8px 11px;font-size:12px;cursor:pointer;user-select:none}
+  .pill.on{background:var(--mid);border-color:var(--mid);color:#02060f;font-weight:700}
+  .btn{background:var(--buy);border:none;color:#02160d;font-weight:800;border-radius:8px;
+    padding:0 16px;font:inherit;font-size:13px;cursor:pointer;letter-spacing:.5px}
+  .btn:active{transform:translateY(1px)}
+  .btn.live{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-weight:600}
+  .btn.live.on{background:var(--sell);color:#fff;border-color:var(--sell)}
+  .btn.ai{background:var(--mid);color:#02060f}
+  .btn.demo{background:var(--panel2);border:1px solid var(--line);color:var(--dim);font-weight:600}
+  .tools{display:flex;gap:6px;flex-wrap:wrap;padding:2px 2px 8px}
+  .tools .t{background:var(--panel2);border:1px solid var(--line);color:var(--dim);
+    border-radius:7px;padding:6px 9px;font-size:11px;cursor:pointer;user-select:none}
+  .tools .t:hover{color:var(--txt);border-color:#2a3340}
+  .tools .t.on{background:var(--mid);border-color:var(--mid);color:#02060f;font-weight:700}
+  .tools .sep{width:1px;background:var(--line);margin:2px 3px}
+  .strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:10px}
+  .cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .cell .k{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+  .cell .v{font-size:16px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .up{color:var(--buy)} .down{color:var(--sell)}
+  .aipanel{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin-bottom:10px;font-size:12px;line-height:1.55;display:none}
+  .aipanel.show{display:block}
+  .aipanel .bias{font-weight:800;text-transform:uppercase;letter-spacing:1px}
+  .aipanel .bias.bullish{color:var(--buy)} .aipanel .bias.bearish{color:var(--sell)}
+  .aipanel .bias.neutral{color:var(--dim)}
+  .chartwrap{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px;margin-bottom:10px}
+  #kline{height:520px;background:var(--panel)}
+  .status{font-size:11px;color:var(--dim);min-height:16px;margin:2px 2px 12px}
+  .status.err{color:var(--sell)}
+  .note{font-size:10px;color:var(--dim);line-height:1.6;border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+  .note b{color:var(--amber)} a{color:var(--mid)}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="logo"><span class="b">SIGNAL</span> // <span class="s">TERMINAL</span></div>
+    <div class="tag">klinecharts · native tools</div>
+  </div>
+
+  <div class="controls">
+    <input id="addr" placeholder="paste DexScreener link or pool/pair address" />
+    <select id="chain">
+      <option value="solana">Solana</option><option value="eth">Ethereum</option>
+      <option value="base">Base</option><option value="bsc">BSC</option>
+      <option value="arbitrum">Arbitrum</option><option value="polygon_pos">Polygon</option>
+      <option value="avax">Avalanche</option>
+    </select>
+    <div class="tfgroup" id="tfgroup">
+      <div class="pill" data-tf="5m">5m</div><div class="pill" data-tf="15m">15m</div>
+      <div class="pill on" data-tf="1H">1H</div><div class="pill" data-tf="4H">4H</div>
+      <div class="pill" data-tf="1D">1D</div>
+    </div>
+    <button class="btn" id="load">LOAD</button>
+    <button class="btn live" id="live">● LIVE</button>
+    <button class="btn ai" id="ai">🧠 AI ANALYZE</button>
+    <button class="btn demo" id="demo">DEMO</button>
+  </div>
+
+  <div class="strip" id="strip">
+    <div class="cell"><div class="k">Pair</div><div class="v" id="m-pair">—</div></div>
+    <div class="cell"><div class="k">Price</div><div class="v" id="m-price">—</div></div>
+    <div class="cell"><div class="k">24h</div><div class="v" id="m-chg">—</div></div>
+    <div class="cell"><div class="k">RSI 14</div><div class="v" id="m-rsi">—</div></div>
+    <div class="cell"><div class="k">Liquidity</div><div class="v" id="m-liq">—</div></div>
+    <div class="cell"><div class="k">Vol 24h</div><div class="v" id="m-vol">—</div></div>
+  </div>
+
+  <div class="status" id="status">Paste a token and hit LOAD. KLineCharts version — native EMA/RSI/VOL, AI draws levels, zones & trendlines as real overlays.</div>
+  <div class="aipanel" id="aipanel"></div>
+
+  <div class="chartwrap">
+    <div class="tools" id="tools">
+      <div class="t" data-tool="segment">╱ Trend</div>
+      <div class="t" data-tool="rayLine">→ Ray</div>
+      <div class="t" data-tool="horizontalStraightLine">— H-Line</div>
+      <div class="t" data-tool="verticalStraightLine">| V-Line</div>
+      <div class="t" data-tool="rectDraw">▭ Rect</div>
+      <div class="t" data-tool="fibonacciLine">𝑓 Fib</div>
+      <div class="t" data-tool="priceLine">▱ P-Line</div>
+      <div class="t" data-tool="brush">✎ Brush</div>
+      <div class="sep"></div>
+      <div class="t" id="t-magnet">🧲 Magnet</div>
+      <div class="t" id="t-undo">↶ Undo</div>
+      <div class="t" id="t-clear">🗑 Clear</div>
+    </div>
+    <div id="kline"></div>
+  </div>
+
+  <div class="note">
+    <b>This is the KLineCharts build.</b> Indicators (EMA 9/21/50, RSI 14, Volume) are native chart indicators. The <b>🧠 AI ANALYZE</b> button calls the same Claude backend; the returned levels/zones/trendlines are drawn as real chart overlays (custom box/line shapes), not a canvas hack. <b>DEMO</b> draws samples with no API call.<br><br>
+    <b>Not financial advice.</b> Memecoins are extremely high risk — indicators describe momentum, they don't predict rugs or LP pulls. Size accordingly.
+  </div>
+
+<script>
+const GT='https://api.geckoterminal.com/api/v2';
+const TF={'5m':{tf:'minute',agg:5},'15m':{tf:'minute',agg:15},'1H':{tf:'hour',agg:1},'4H':{tf:'hour',agg:4},'1D':{tf:'day',agg:1}};
+const NETMAP={solana:'solana',eth:'eth',ethereum:'eth',base:'base',bsc:'bsc',arbitrum:'arbitrum',polygon:'polygon_pos',polygon_pos:'polygon_pos',avax:'avax',avalanche:'avax'};
+let curTF='1H', liveTimer=null, lastReq=null, chart=null, lastCandles=[], aiIds=[];
+let manualIds=[], magnetMode='normal';
+
+/* ---------- helpers ---------- */
+function hexA(hex,a){const m=(hex||'#5b8dff').replace('#','');
+  const n=m.length===3?m.split('').map(x=>x+x).join(''):m;
+  const r=parseInt(n.slice(0,2),16),g=parseInt(n.slice(2,4),16),b=parseInt(n.slice(4,6),16);
+  return `rgba(${r||90},${g||141},${b||255},${a})`;}
+function rsi(c,p=14){if(c.length<=p)return null;let g=0,l=0;
+  for(let i=1;i<=p;i++){const d=c[i].close-c[i-1].close;if(d>=0)g+=d;else l-=d;}
+  g/=p;l/=p;let r=l===0?100:100-100/(1+g/l);
+  for(let i=p+1;i<c.length;i++){const d=c[i].close-c[i-1].close,gg=d>0?d:0,ll=d<0?-d:0;
+    g=(g*(p-1)+gg)/p;l=(l*(p-1)+ll)/p;r=l===0?100:100-100/(1+g/l);}return r;}
+function fmtPrice(p){if(!p)return'0';if(p>=1)return p.toFixed(4);return p.toPrecision(4);}
+function fmtBig(n){if(!n)return'0';if(n>=1e9)return(n/1e9).toFixed(2)+'B';
+  if(n>=1e6)return(n/1e6).toFixed(2)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return n.toFixed(0);}
+function setStatus(t,err){const e=document.getElementById('status');e.textContent=t;e.className='status'+(err?' err':'');}
+
+/* ---------- custom AI overlays ---------- */
+klinecharts.registerOverlay({
+  name:'aiLevel', totalStep:2, lock:true,
+  needDefaultPointFigure:false, needDefaultXAxisFigure:false, needDefaultYAxisFigure:false,
+  createPointFigures:({coordinates,bounding,overlay})=>{
+    if(!coordinates.length)return [];
+    const y=coordinates[0].y,w=bounding.width,ext=overlay.extendData||{},c=ext.color||'#ffb020';
+    const figs=[{type:'line',attrs:{coordinates:[{x:0,y},{x:w,y}]},
+      styles:{color:c,size:1,style:ext.style==='solid'?'solid':'dashed'}}];
+    if(ext.label)figs.push({type:'text',attrs:{x:6,y:y+2,text:ext.label},styles:{color:c,size:11}});
+    return figs;
+  }
+});
+klinecharts.registerOverlay({
+  name:'aiZone', totalStep:3, lock:true,
+  needDefaultPointFigure:false, needDefaultXAxisFigure:false, needDefaultYAxisFigure:false,
+  createPointFigures:({coordinates,overlay})=>{
+    if(coordinates.length<2)return [];
+    const a=coordinates[0],b=coordinates[1];
+    const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);
+    const ext=overlay.extendData||{},c=ext.color||'#5b8dff';
+    const figs=[{type:'rect',attrs:{x,y,width:w,height:h},
+      styles:{style:'stroke_fill',color:hexA(c,0.13),borderColor:c,borderSize:1}}];
+    if(ext.label)figs.push({type:'text',attrs:{x:x+4,y:y+2,text:ext.label},styles:{color:c,size:11}});
+    return figs;
+  }
+});
+klinecharts.registerOverlay({
+  name:'aiTrend', totalStep:3, lock:true,
+  needDefaultPointFigure:false, needDefaultXAxisFigure:false, needDefaultYAxisFigure:false,
+  createPointFigures:({coordinates,overlay})=>{
+    if(coordinates.length<2)return [];
+    const ext=overlay.extendData||{},c=ext.color||'#16ff9e';
+    const figs=[{type:'line',attrs:{coordinates:[coordinates[0],coordinates[1]]},styles:{color:c,size:2}}];
+    if(ext.label)figs.push({type:'text',attrs:{x:coordinates[1].x+4,y:coordinates[1].y-6,text:ext.label},styles:{color:c,size:11}});
+    return figs;
+  }
+});
+
+/* user-drawable rectangle (KLineCharts has no built-in rect) */
+klinecharts.registerOverlay({
+  name:'rectDraw', totalStep:3,
+  createPointFigures:({coordinates})=>{
+    if(coordinates.length<2)return [];
+    const a=coordinates[0],b=coordinates[1];
+    const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h=Math.abs(b.y-a.y);
+    return [{type:'rect',attrs:{x,y,width:w,height:h},
+      styles:{style:'stroke_fill',color:'rgba(91,141,255,0.10)',borderColor:'#5b8dff',borderSize:1}}];
+  }
+});
+
+/* ---------- chart ---------- */
+function initChart(){
+  if(chart)return;
+  chart=klinecharts.init('kline');
+  chart.setStyles({
+    grid:{horizontal:{color:'#13171f'},vertical:{color:'#13171f'}},
+    candle:{
+      bar:{upColor:'#16c98a',downColor:'#ff4d6d',noChangeColor:'#888',
+        upBorderColor:'#16c98a',downBorderColor:'#ff4d6d',noChangeBorderColor:'#888',
+        upWickColor:'#16c98a',downWickColor:'#ff4d6d',noChangeWickColor:'#888'},
+      priceMark:{last:{text:{color:'#02060f'}}},
+      tooltip:{text:{color:'#e8edf2'}}
+    },
+    indicator:{tooltip:{text:{color:'#7b8794'}}},
+    xAxis:{axisLine:{color:'#1c212b'},tickLine:{color:'#1c212b'},tickText:{color:'#7b8794'}},
+    yAxis:{axisLine:{color:'#1c212b'},tickLine:{color:'#1c212b'},tickText:{color:'#7b8794'}},
+    separator:{color:'#1c212b'},
+    crosshair:{horizontal:{line:{color:'#3a4252'},text:{backgroundColor:'#1c212b',borderColor:'#1c212b'}},
+               vertical:{line:{color:'#3a4252'},text:{backgroundColor:'#1c212b',borderColor:'#1c212b'}}}
+  });
+  chart.createIndicator({name:'EMA',calcParams:[9,21,50]},true,{id:'candle_pane'});
+  chart.createIndicator('VOL',false,{id:'vol_pane'});
+  chart.createIndicator({name:'RSI',calcParams:[14]},false,{id:'rsi_pane'});
+  window.addEventListener('resize',()=>chart&&chart.resize());
+}
+
+/* ---------- data ---------- */
+function parseInput(){
+  let v=document.getElementById('addr').value.trim();
+  let chain=document.getElementById('chain').value;
+  if(v.includes('dexscreener.com')){
+    const m=v.split('dexscreener.com/')[1].split(/[?#]/)[0].split('/').filter(Boolean);
+    if(m.length>=2){chain=NETMAP[m[0].toLowerCase()]||m[0].toLowerCase();v=m[1];}
+  }
+  v=v.replace(/[?#].*$/,'');
+  return {net:NETMAP[chain]||chain,pool:v};
+}
+async function getJSON(url){const res=await fetch(url,{headers:{accept:'application/json'}});
+  if(!res.ok)throw new Error(res.status+' '+res.statusText);return res.json();}
+async function fetchOHLC(net,pool,tf){
+  const t=TF[tf];
+  const u=`${GT}/networks/${net}/pools/${pool}/ohlcv/${t.tf}?aggregate=${t.agg}&limit=500&currency=usd`;
+  const j=await getJSON(u);
+  const list=(j?.data?.attributes?.ohlcv_list||[])
+    .map(x=>({timestamp:(+x[0])*1000,open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]}))
+    .filter(x=>x.close>0).sort((a,b)=>a.timestamp-b.timestamp);
+  const seen=new Set(),out=[];for(const k of list){if(!seen.has(k.timestamp)){seen.add(k.timestamp);out.push(k);}}
+  return out;
+}
+async function fetchMeta(net,pool){
+  try{const j=await getJSON(`${GT}/networks/${net}/pools/${pool}`);
+    const a=j?.data?.attributes;if(!a)return null;
+    return{name:a.name,price:+a.base_token_price_usd,liq:+(a.reserve_in_usd||0),
+      vol:+(a.volume_usd?.h24||0),chg:+(a.price_change_percentage?.h24||0)};
+  }catch(e){return null;}
+}
+
+/* ---------- AI overlays ---------- */
+function clearAI(){aiIds.forEach(id=>{try{chart.removeOverlay(id);}catch(e){}});aiIds=[];}
+function tsAt(i){const n=lastCandles.length;if(!n)return Date.now();
+  const k=Math.max(0,Math.min(n-1,i|0));return lastCandles[k].timestamp;}
+function add(o){const id=chart.createOverlay(o);if(id)aiIds.push(id);}
+function showAI(d){
+  clearAI();
+  const lastTs=tsAt(lastCandles.length-1);
+  (d.levels||[]).forEach(lv=>add({name:'aiLevel',lock:true,
+    points:[{timestamp:lastTs,value:lv.price}],
+    extendData:{color:lv.color,label:lv.label,style:lv.style}}));
+  (d.zones||[]).forEach(z=>add({name:'aiZone',lock:true,
+    points:[{timestamp:tsAt(z.startIndex!=null?z.startIndex:0),value:z.priceHigh},
+            {timestamp:tsAt(z.endIndex!=null?z.endIndex:lastCandles.length-1),value:z.priceLow}],
+    extendData:{color:z.color,label:z.label}}));
+  (d.trendlines||[]).forEach(t=>add({name:'aiTrend',lock:true,
+    points:[{timestamp:tsAt(t.startIndex),value:t.startPrice},
+            {timestamp:tsAt(t.endIndex),value:t.endPrice}],
+    extendData:{color:t.color,label:t.label}}));
+  const p=document.getElementById('aipanel'),bias=(d.bias||'neutral').toLowerCase();
+  p.className='aipanel show';
+  p.innerHTML=`<span class="bias ${bias}">${bias}</span> &nbsp;${(d.summary||'').replace(/</g,'&lt;')}`;
+}
+
+/* ---------- run ---------- */
+async function load(){
+  const {net,pool}=parseInput();
+  if(!pool){setStatus('paste a DexScreener link or pool address first',true);return;}
+  lastReq={net,pool};
+  setStatus('fetching candles…',false);
+  try{
+    initChart();
+    const [c,meta]=await Promise.all([fetchOHLC(net,pool,curTF),fetchMeta(net,pool)]);
+    if(!c.length){setStatus('no candle data — make sure it\'s a POOL/PAIR address (the dexscreener page url), not the token mint, and the right chain is selected.',true);return;}
+    lastCandles=c;
+    clearAI();
+    manualIds.forEach(id=>{try{chart.removeOverlay(id)}catch(e){}});manualIds=[];
+    document.getElementById('aipanel').className='aipanel';
+    chart.applyNewData(c);
+    const last=c[c.length-1],r=rsi(c,14),price=meta?.price||last.close;
+    document.getElementById('m-pair').textContent=meta?.name||'pool';
+    document.getElementById('m-price').textContent='$'+fmtPrice(price);
+    const chg=meta?.chg;
+    if(chg!=null&&!isNaN(chg)){const e=document.getElementById('m-chg');
+      e.textContent=(chg>=0?'+':'')+chg.toFixed(2)+'%';e.className='v '+(chg>=0?'up':'down');}
+    const re=document.getElementById('m-rsi');
+    re.textContent=r!=null?r.toFixed(1):'—';re.className='v '+(r==null?'':r>70?'down':r<30?'up':'');
+    if(meta){document.getElementById('m-liq').textContent='$'+fmtBig(meta.liq);
+      document.getElementById('m-vol').textContent='$'+fmtBig(meta.vol);}
+    setStatus(`loaded ${c.length} candles · ${curTF}`,false);
+  }catch(e){
+    setStatus('fetch failed: '+e.message+' — if the chart is empty, host this on Netlify/Vercel (sandboxes block the feed).',true);
+  }
+}
+async function runAI(){
+  if(!lastCandles.length){setStatus('load a chart first',true);return;}
+  setStatus('asking AI for analysis…',false);
+  try{
+    const payload={pair:document.getElementById('m-pair').textContent||'token',tf:curTF,
+      candles:lastCandles.map(c=>({o:c.open,h:c.high,l:c.low,c:c.close,v:c.volume}))};
+    const r=await fetch('https://signal-terminal-ai-tp.netlify.app/.netlify/functions/analyze',{method:'POST',
+      headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)throw new Error('backend '+r.status);
+    const d=await r.json();if(d.error)throw new Error(d.error);
+    showAI(d);
+    setStatus(`AI drawn · ${d.levels?.length||0} levels · ${d.zones?.length||0} zones · ${d.trendlines?.length||0} trendlines`,false);
+  }catch(e){
+    setStatus('AI call failed: '+e.message+' — deploy the Netlify function (or hit DEMO to preview).',true);
+  }
+}
+function demoAI(){
+  if(!lastCandles.length){setStatus('load a chart first, then DEMO',true);return;}
+  let hi=-Infinity,lo=Infinity;for(const c of lastCandles){if(c.high>hi)hi=c.high;if(c.low<lo)lo=c.low;}
+  const span=hi-lo||1,n=lastCandles.length;
+  showAI({bias:'neutral',summary:'DEMO drawing (no AI call) — sample resistance, support, a demand zone and a trendline as native overlays.',
+    levels:[{price:hi-span*0.12,color:'#ff4d6d',label:'Resistance',style:'solid'},
+            {price:lo+span*0.15,color:'#16ff9e',label:'Support',style:'solid'}],
+    zones:[{priceHigh:hi-span*0.25,priceLow:hi-span*0.40,startIndex:Math.floor(n*0.45),endIndex:n-1,color:'#5b8dff',label:'Demand zone'}],
+    trendlines:[{startIndex:Math.floor(n*0.1),startPrice:lo+span*0.1,endIndex:n-1,endPrice:hi-span*0.2,color:'#ffb020',label:'Trend'}]});
+  setStatus('demo overlays drawn',false);
+}
+
+/* ---------- manual drawing toolbar ---------- */
+function tool(name){
+  if(!chart){setStatus('load a chart first',true);return;}
+  const id=chart.createOverlay({name,mode:magnetMode});
+  if(id)manualIds.push(id);
+}
+document.getElementById('tools').addEventListener('click',e=>{
+  const el=e.target.closest('.t');if(!el)return;
+  if(el.dataset.tool){
+    tool(el.dataset.tool);
+    document.querySelectorAll('#tools .t[data-tool]').forEach(x=>x.classList.remove('on'));
+    el.classList.add('on');setTimeout(()=>el.classList.remove('on'),700);
+    setStatus('click on the chart to draw — '+el.textContent.trim(),false);return;}
+  if(el.id==='t-magnet'){magnetMode=magnetMode==='normal'?'weak_magnet':'normal';
+    el.classList.toggle('on',magnetMode!=='normal');
+    setStatus('magnet '+(magnetMode==='normal'?'off':'on — snaps to candle OHLC'),false);return;}
+  if(el.id==='t-undo'){const id=manualIds.pop();if(id){try{chart.removeOverlay(id)}catch(e){}}return;}
+  if(el.id==='t-clear'){manualIds.forEach(id=>{try{chart.removeOverlay(id)}catch(e){}});manualIds=[];
+    setStatus('cleared your drawings',false);return;}
+});
+
+/* events */
+document.getElementById('load').onclick=load;
+document.getElementById('ai').onclick=runAI;
+document.getElementById('demo').onclick=demoAI;
+document.getElementById('addr').addEventListener('keydown',e=>{if(e.key==='Enter')load();});
+document.getElementById('tfgroup').addEventListener('click',e=>{
+  const p=e.target.closest('.pill');if(!p)return;
+  document.querySelectorAll('#tfgroup .pill').forEach(x=>x.classList.remove('on'));
+  p.classList.add('on');curTF=p.dataset.tf;if(lastReq)load();});
+document.getElementById('live').onclick=function(){
+  this.classList.toggle('on');
+  if(this.classList.contains('on')){liveTimer=setInterval(()=>{if(lastReq)load();},60000);
+    setStatus('live — refreshing every 60s',false);}
+  else{clearInterval(liveTimer);liveTimer=null;}
+};
+</script>
+</body>
+</html>
