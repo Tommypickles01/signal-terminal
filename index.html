@@ -1473,8 +1473,13 @@ async function liveTick(){
   try{
     const p=await fetchPair(lastReq.net,lastReq.pool);
     const m=metaFromPair(p); if(!m||!m.price)return;
-    metaCur=m; if(m.supply)supply=m.supply;
     const last=candlesRaw[candlesRaw.length-1];
+    // DexScreener (live price) and GeckoTerminal (candles) are different feeds and
+    // can briefly disagree — esp. for multi-pool tokens. Reject a glitched/divergent
+    // print so it can't ratchet into last.high/low and latch a permanent spike.
+    const ref=last.close||m.price;
+    if(!(m.price>ref/3&&m.price<ref*3)){return;}
+    metaCur=m; if(m.supply)supply=m.supply;
     last.close=m.price;
     if(m.price>last.high)last.high=m.price;
     if(m.price<last.low)last.low=m.price;
