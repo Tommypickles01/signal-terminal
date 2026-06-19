@@ -669,6 +669,7 @@
       </div>
 
       <div class="status" id="status">Search a token or paste a DexScreener link / pool address, then hit LOAD.</div>
+      <div id="aipanel" style="display:none;background:#0d0f13;border:1px solid #1c212b;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:12px;line-height:1.5"></div>
 
       <div class="chartwrap" id="pricewrap">
         <div class="lbl" id="pricelbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
@@ -1646,6 +1647,7 @@ async function load(){
     const meta=metaFromPair(pair);
     candlesRaw=c; metaCur=meta; supply=(meta&&meta.supply)||0;
     aiShapes={levels:[],zones:[],trendlines:[]};
+    {const _ap=document.getElementById('aipanel');if(_ap)_ap.style.display='none';}
     dsUrl=(meta&&meta.url)||'';
     syncEmbed();
     render(candlesRaw,metaCur);
@@ -2127,7 +2129,12 @@ function showAI(d){
   aiShapes={levels:d.levels||[],zones:d.zones||[],trendlines:d.trendlines||[]};
   drawAI();
   const b=(d.bias||'neutral').toUpperCase();
-  setStatus('🧠 AI '+b+' — '+(d.summary||'')+'  ('+(d.levels?.length||0)+' levels · '+(d.zones?.length||0)+' zones · '+(d.trendlines?.length||0)+' trendlines)',false);
+  const col=b==='BULLISH'?'#16ff9e':b==='BEARISH'?'#ff4d6d':'#7b8794';
+  const p=document.getElementById('aipanel');
+  if(p){p.style.display='block';
+    p.innerHTML='<b style="color:'+col+';letter-spacing:1px">🧠 '+b+'</b> &nbsp;'+
+      String(d.summary||'').replace(/</g,'&lt;')+
+      ' <span style="color:#7b8794">('+(d.levels?.length||0)+' levels · '+(d.zones?.length||0)+' zones · '+(d.trendlines?.length||0)+' trendlines)</span>';}
 }
 async function runAI(){
   if(!aiCandles||!aiCandles.length){setStatus('load a chart first',true);return;}
