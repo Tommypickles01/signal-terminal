@@ -670,6 +670,10 @@
 
       <div class="status" id="status">Search a token or paste a DexScreener link / pool address, then hit LOAD.</div>
       <div id="aipanel" style="display:none;background:#0d0f13;border:1px solid #1c212b;border-radius:10px;padding:9px 12px;margin:0 0 10px;font-size:12px;line-height:1.5"></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="aiq" placeholder="ask AI to draw a scenario — e.g. &quot;next leg up if it breaks the range high&quot;" style="flex:1;min-width:200px;background:#11141a;border:1px solid #1c212b;color:#e8edf2;border-radius:8px;padding:9px 10px;font:inherit;font-size:13px">
+        <button class="btn" id="askbtn" style="background:#5b8dff;color:#02060f">ASK ▸</button>
+      </div>
 
       <div class="chartwrap" id="pricewrap">
         <div class="lbl" id="pricelbl">PRICE · EMA 9/21/50 · AUTO-FIB</div>
@@ -1360,7 +1364,7 @@ const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,m
 let STRAT='confluence';
 /* live/view state */
 let candlesRaw=[],metaCur=null,supply=0,mode='price',dsUrl='',candleTimer=null;
-let aiCandles=[],aiShapes={levels:[],zones:[],trendlines:[]},aiOv,aiCtx;
+let aiCandles=[],aiShapes={levels:[],zones:[],trendlines:[],projections:[]},aiOv,aiCtx;
 function initCharts(){
   if(ready)return;
   // Lightweight Charts renders the time axis in UTC by default; format ticks &
@@ -1646,7 +1650,7 @@ async function load(){
     if(!c.length){setStatus('no candle data for that pool/timeframe. Make sure it\'s a POOL/PAIR address (the dexscreener page url), not the token mint, and the right chain is selected.',true);return;}
     const meta=metaFromPair(pair);
     candlesRaw=c; metaCur=meta; supply=(meta&&meta.supply)||0;
-    aiShapes={levels:[],zones:[],trendlines:[]};
+    aiShapes={levels:[],zones:[],trendlines:[],projections:[]};
     {const _ap=document.getElementById('aipanel');if(_ap)_ap.style.display='none';}
     dsUrl=(meta&&meta.url)||'';
     syncEmbed();
@@ -2084,8 +2088,7 @@ function aiHexA(hex,a){const m=(hex||'#5b8dff').replace('#','');
   const n=m.length===3?m.split('').map(x=>x+x).join(''):m;
   const r=parseInt(n.slice(0,2),16),g=parseInt(n.slice(2,4),16),b=parseInt(n.slice(4,6),16);
   return `rgba(${r||90},${g||141},${b||255},${a})`;}
-function aiXIndex(i,ts){const n=aiCandles.length;if(!n)return null;
-  const k=Math.max(0,Math.min(n-1,i|0));return ts.timeToCoordinate(aiCandles[k].time);}
+function aiXIndex(i,ts){const x=ts.logicalToCoordinate(i);return x==null?null:x;}
 function drawAI(){
   if(!aiOv||!aiCtx||!ready||!pchart||!cs)return;
   const wrap=document.getElementById('pricewrap'),pe=document.getElementById('price');
@@ -2124,9 +2127,25 @@ function drawAI(){
     aiCtx.strokeStyle=c;aiCtx.lineWidth=1.5;aiCtx.beginPath();aiCtx.moveTo(dx+x1,dy+y1);aiCtx.lineTo(dx+x2,dy+y2);aiCtx.stroke();
     if(t.label){aiCtx.fillStyle=c;aiCtx.fillText(t.label,dx+x2-aiCtx.measureText(t.label).width,dy+y2-4);}
   }
+  for(const pj of (aiShapes.projections||[])){
+    const pts=(pj.path||[]).map(pt=>{const x=aiXIndex(pt.index,ts),y=cs.priceToCoordinate(pt.price);
+      return (x==null||y==null)?null:{x:dx+x,y:dy+y};}).filter(Boolean);
+    if(pts.length<2)continue;
+    const c=pj.color||'#16ff9e';
+    aiCtx.strokeStyle=c;aiCtx.lineWidth=2;aiCtx.setLineDash(pj.style==='solid'?[]:[6,4]);
+    aiCtx.beginPath();aiCtx.moveTo(pts[0].x,pts[0].y);
+    for(let i=1;i<pts.length;i++)aiCtx.lineTo(pts[i].x,pts[i].y);
+    aiCtx.stroke();aiCtx.setLineDash([]);
+    const e=pts[pts.length-1];
+    aiCtx.fillStyle=c;aiCtx.beginPath();aiCtx.arc(e.x,e.y,3,0,Math.PI*2);aiCtx.fill();
+    if(pj.label)aiCtx.fillText(pj.label,e.x-aiCtx.measureText(pj.label).width-5,e.y-5);
+  }
 }
 function showAI(d){
-  aiShapes={levels:d.levels||[],zones:d.zones||[],trendlines:d.trendlines||[]};
+  aiShapes={levels:d.levels||[],zones:d.zones||[],trendlines:d.trendlines||[],projections:d.projections||[]};
+  let maxIdx=0;(d.projections||[]).forEach(p=>(p.path||[]).forEach(pt=>{if(pt.index>maxIdx)maxIdx=pt.index;}));
+  const future=maxIdx-(aiCandles.length-1);
+  if(future>0&&pchart){try{pchart.timeScale().applyOptions({rightOffset:Math.min(80,Math.max(6,future+3))});}catch(e){}}
   drawAI();
   const b=(d.bias||'neutral').toUpperCase();
   const col=b==='BULLISH'?'#16ff9e':b==='BEARISH'?'#ff4d6d':'#7b8794';
@@ -2134,13 +2153,14 @@ function showAI(d){
   if(p){p.style.display='block';
     p.innerHTML='<b style="color:'+col+';letter-spacing:1px">🧠 '+b+'</b> &nbsp;'+
       String(d.summary||'').replace(/</g,'&lt;')+
-      ' <span style="color:#7b8794">('+(d.levels?.length||0)+' levels · '+(d.zones?.length||0)+' zones · '+(d.trendlines?.length||0)+' trendlines)</span>';}
+      ' <span style="color:#7b8794">('+(d.levels?.length||0)+' levels · '+(d.zones?.length||0)+' zones · '+(d.trendlines?.length||0)+' trend · '+(d.projections?.length||0)+' proj)</span>';}
 }
-async function runAI(){
+async function runAI(question){
   if(!aiCandles||!aiCandles.length){setStatus('load a chart first',true);return;}
-  setStatus('asking AI for analysis…',false);
+  setStatus(question?('asking AI: '+question):'asking AI for analysis…',false);
   try{
     const payload={pair:(document.getElementById('m-pair')||{}).textContent||'token',tf:(typeof curTF!=='undefined'?curTF:''),
+      question:question||'',
       candles:aiCandles.map(c=>({o:c.open,h:c.high,l:c.low,c:c.close,v:c.volume}))};
     const r=await fetch('https://signal-terminal-ai-tp.netlify.app/.netlify/functions/analyze',
       {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
@@ -2149,7 +2169,10 @@ async function runAI(){
     showAI(d);
   }catch(e){setStatus('AI call failed: '+e.message,true);}
 }
-{const _b=document.getElementById('aibtn');if(_b)_b.addEventListener('click',runAI);}
+{const _b=document.getElementById('aibtn');if(_b)_b.addEventListener('click',()=>runAI());
+ const _a=document.getElementById('askbtn'),_q=document.getElementById('aiq');
+ if(_a&&_q){_a.addEventListener('click',()=>runAI(_q.value));
+   _q.addEventListener('keydown',e=>{if(e.key==='Enter')runAI(_q.value);});}}
 function startTitleFlash(msg){
   stopTitleFlash();
   if(document.hasFocus())return;  // tab already visible — the cell glow is enough
