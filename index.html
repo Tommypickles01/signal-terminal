@@ -1944,12 +1944,26 @@ function memStats(){
   }
   _memCache={fac,all};_memCacheVer=_memVer;return _memCache;
 }
-/* adaptive confidence 0..1 for a set of factors */
+/* Per-factor PRIORS from the backtest (forward 8-bar hit-rate, ~11.4k bars across
+   WIF/BONK/POPCAT/JUP/LAYOFF — see SIGNAL_BACKTEST.md). RSI overbought/oversold
+   flips win ~60%; the raw EMA9×21 cross is the weakest (~41%). These seed
+   confidence so it's informed from day one, then live grades take over. */
+const FACTOR_PRIOR={
+  rsiOB:0.61, rsiOS:0.60, stochRsiSell:0.55, bearDiv:0.55, tpoSell:0.52,
+  volSpikeDn:0.51, vidyaUp:0.50, emaLose:0.50, emaXdn:0.47, stochRsiBuy:0.47,
+  vidyaDn:0.46, emaReclaim:0.45, bullDiv:0.45, volSpike:0.44, tpoBuy:0.43, emaCross:0.41,
+  superTrend:0.55, emaUp:0.50, emaDn:0.50, macdUp:0.50, macdDn:0.50};
+const PRIOR_K=25; // strength of the prior, in pseudo-observations
+/* adaptive confidence 0..1 for a set of factors — Bayesian shrinkage of the live
+   per-factor win-rate toward its backtest prior (prior dominates early, live data
+   takes over as graded signals accumulate). */
 function confidence(factors){
   const {fac}=memStats();
   let acc=0,used=0;
-  for(const f of factors){const o=fac[f];
-    if(o&&o.n>=5){acc+=o.wins/o.n;used++;}else{acc+=0.5;used++;}}
+  for(const f of factors){
+    const prior=FACTOR_PRIOR[f]!=null?FACTOR_PRIOR[f]:0.5;
+    const o=fac[f], n=o?o.n:0, wins=o?o.wins:0;
+    acc+=(prior*PRIOR_K+wins)/(PRIOR_K+n); used++;}
   let base=used?acc/used:0.5;
   base+=Math.max(0,(factors.length-1))*0.03; // more confirmations = slightly more trust
   return Math.max(0,Math.min(1,base));
