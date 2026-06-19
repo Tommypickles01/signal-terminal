@@ -545,6 +545,7 @@
         <div class="ind" data-ind="vwap">VWAP</div>
         <div class="ind" data-ind="macd">MACD</div>
         <div class="ind" data-ind="tpo">2-POLE</div>
+        <div class="ind" data-ind="srsi">STOCH RSI</div>
         <div class="ind" data-ind="vidya">VIDYA</div>
         <div class="ind on" data-ind="levels">SL / TP</div>
       </div>
@@ -576,6 +577,10 @@
       <div class="chartwrap" id="tpowrap" style="display:none">
         <div class="lbl">TWO-POLE OSCILLATOR · BIGBELUGA · CROSS DOTS</div>
         <div id="tpo"></div>
+      </div>
+      <div class="chartwrap" id="srsiwrap" style="display:none">
+        <div class="lbl">STOCH RSI · 14/14/3/3 · OB&gt;80 OS&lt;20 CROSS DOTS</div>
+        <div id="srsi"></div>
       </div>
     </div>
 
@@ -735,10 +740,40 @@ function rsi(c,p=14){const out=Array(c.length).fill(null);if(c.length<=p)return 
   g/=p;l/=p;out[p]=l===0?100:100-100/(1+g/l);
   for(let i=p+1;i<c.length;i++){const d=c[i]-c[i-1],gg=d>0?d:0,ll=d<0?-d:0;
     g=(g*(p-1)+gg)/p;l=(l*(p-1)+ll)/p;out[i]=l===0?100:100-100/(1+g/l);}return out;}
-function fib(candles){let hi=-Infinity,lo=Infinity;
-  for(const c of candles){if(c.high>hi)hi=c.high;if(c.low<lo)lo=c.low;}
-  const r=[0,0.236,0.382,0.5,0.618,0.786,1];
-  return r.map(x=>({r:x,price:lo+(hi-lo)*x}));}
+/* Auto-Fib: anchor on the dominant recent swing leg (extreme high vs extreme low
+   over the last ~120 bars). Direction = whichever extreme printed LAST. Adds
+   1.272 / 1.618 extension TARGETS beyond the swing in the trend direction. */
+function fib(candles){
+  const N=Math.min(candles.length,120);
+  const seg=candles.slice(candles.length-N);
+  let hi=-Infinity,lo=Infinity,hiI=0,loI=0;
+  for(let i=0;i<seg.length;i++){
+    if(seg[i].high>hi){hi=seg[i].high;hiI=i;}
+    if(seg[i].low<lo){lo=seg[i].low;loI=i;}}
+  const up=hiI>loI; // swing high printed after the low => up-leg
+  const rng=hi-lo;
+  const base=[0,0.236,0.382,0.5,0.618,0.786,1];
+  const out=base.map(x=>({r:x,price:lo+rng*x,up}));
+  for(const e of [1.272,1.618]){
+    out.push({r:e,price:up?lo+rng*e:lo-rng*(e-1),ext:true,up});}
+  return out;}
+/* Stochastic RSI: stochastic oscillator applied to RSI. %K=SMA(stoch,smoothK),
+   %D=SMA(%K,smoothD). green dot = %K crosses up %D in oversold (<20);
+   red dot = %K crosses down %D in overbought (>80). */
+function stochRsi(closes,rsiLen=14,stochLen=14,smoothK=3,smoothD=3){
+  const r=rsi(closes,rsiLen),n=closes.length,st=Array(n).fill(null);
+  for(let i=0;i<n;i++){
+    if(r[i]==null||i<stochLen-1)continue;
+    let mn=Infinity,mx=-Infinity,ok=true;
+    for(let j=i-stochLen+1;j<=i;j++){if(r[j]==null){ok=false;break;}if(r[j]<mn)mn=r[j];if(r[j]>mx)mx=r[j];}
+    if(ok)st[i]=mx===mn?0:(r[i]-mn)/(mx-mn)*100;}
+  const k=smaArr(st,smoothK),d=smaArr(k,smoothD);
+  const buys=new Set(),sells=new Set();
+  for(let i=1;i<n;i++){
+    if(k[i]==null||d[i]==null||k[i-1]==null||d[i-1]==null)continue;
+    if(k[i-1]<=d[i-1]&&k[i]>d[i]&&k[i]<20)buys.add(i);
+    if(k[i-1]>=d[i-1]&&k[i]<d[i]&&k[i]>80)sells.add(i);}
+  return {k,d,buys,sells};}
 /* Bollinger Bands: SMA(p) ± mult*stddev */
 function bollinger(closes,p=20,mult=2){
   const mid=Array(closes.length).fill(null),up=Array(closes.length).fill(null),lo=Array(closes.length).fill(null);
@@ -1017,7 +1052,7 @@ function signals(c){
   const e9=ema(closes,9),e21=ema(closes,21),e50=ema(closes,50),e200=ema(closes,200);
   const r=rsi(closes,14),ax=adx(c,14),at=atr(c,14),div=rsiDivergence(c,r,60,2),md=macd(closes,12,26,9);
   // BigBeluga confluence: Two-Pole crosses + VIDYA trend flips
-  const tpo=twoPole(c,20), vid=vidya(c,34,20,2.0);
+  const tpo=twoPole(c,20), vid=vidya(c,34,20,2.0), sq=stochRsi(closes,14,14,3,3);
   const vUp=new Set(),vDn=new Set();
   vid.flips.forEach(f=>(f.up?vUp:vDn).add(f.i));
   const markers=[];let pos='flat',last=-5;
@@ -1031,6 +1066,7 @@ function signals(c){
       volSpike:c[i].close>c[i].open&&av>0&&c[i].volume>av*1.6,
       bullDiv:div.bull.has(i),
       tpoBuy:tpo.buys.has(i),
+      stochRsiBuy:sq.buys.has(i),
       vidyaUp:vUp.has(i)};
     const sf={rsiOB:r[i-1]>70&&r[i]<=70,
       emaLose:closes[i-1]>e21[i-1]&&closes[i]<e21[i],
@@ -1038,6 +1074,7 @@ function signals(c){
       volSpikeDn:c[i].close<c[i].open&&av>0&&c[i].volume>av*1.6,
       bearDiv:div.bear.has(i),
       tpoSell:tpo.sells.has(i),
+      stochRsiSell:sq.sells.has(i),
       vidyaDn:vDn.has(i)};
     const buy=Object.values(bf).filter(Boolean).length;
     const sell=Object.values(sf).filter(Boolean).length;
@@ -1082,7 +1119,7 @@ function signals(c){
         adx:ax[i]==null?null:+ax[i].toFixed(0),trend});
       pos='flat';last=i;
     }}
-  return {e9,e21,e50,e200,r,adx:ax,atr:at,markers,pos,tpo,vid};
+  return {e9,e21,e50,e200,r,adx:ax,atr:at,markers,pos,tpo,vid,stoch:sq};
 }
 
 /* ---------- data ---------- */
@@ -1191,12 +1228,14 @@ let wtchart,wt1s,wt2s,wtArea;
 let mchart,macdLine,macdSig,macdHist;
 /* two-pole oscillator pane + its price-chart stop levels */
 let tpochart,tpoLine,tpoSig,tpoBuyLine,tpoSellLine;
+/* stochastic-rsi pane */
+let srsichart,srsiK,srsiD;
 /* volumatic VIDYA (price overlay) + trend cloud */
 let vidyaUp,vidyaDn,vidyaAreaUp,vidyaAreaDn,vidyaLines=[],vidyaInfo=null;
 /* live signal/position SL-TP-entry levels on the price chart */
 let tradeLines=[];
 /* indicator toggle state */
-const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false,vidya:false,levels:true};
+const ind={vol:false,bb:false,fib:true,sr:false,proj:false,wt:false,vwap:false,macd:false,tpo:false,srsi:false,vidya:false,levels:true};
 /* active strategy: 'confluence' (multi-factor vote) or 'trend' (SuperTrend+EMA+MACD) */
 let STRAT='confluence';
 /* live/view state */
@@ -1276,8 +1315,15 @@ function initCharts(){
   tpoSig=tpochart.addLineSeries({color:'#ff4dd2',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   tpoLine=tpochart.addLineSeries({color:'#22d3ee',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
   tpoLine.createPriceLine({price:0,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
+  // stoch-rsi pane (starts hidden, fixed height) — %K (fast) + %D (signal), 0..100
+  srsichart=LightweightCharts.createChart(document.getElementById('srsi'),{...common,height:130});
+  srsiD=srsichart.addLineSeries({color:'#ffb020',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  srsiK=srsichart.addLineSeries({color:'#22d3ee',lineWidth:2,priceLineVisible:false,lastValueVisible:false});
+  srsiK.createPriceLine({price:80,color:'#ff4d6d',lineWidth:1,lineStyle:2,axisLabelVisible:true});
+  srsiK.createPriceLine({price:20,color:'#16ff9e',lineWidth:1,lineStyle:2,axisLabelVisible:true});
+  srsiK.createPriceLine({price:50,color:'#2a3140',lineWidth:1,lineStyle:1,axisLabelVisible:false});
   // sync all panes' visible range
-  const charts=[pchart,rchart,wtchart,mchart,tpochart];let syncing=false;
+  const charts=[pchart,rchart,wtchart,mchart,tpochart,srsichart];let syncing=false;
   charts.forEach(src=>src.timeScale().subscribeVisibleLogicalRangeChange(r=>{
     if(!r||syncing)return;syncing=true;
     charts.forEach(t=>{if(t!==src)t.timeScale().setVisibleLogicalRange(r);});syncing=false;}));
@@ -1286,7 +1332,8 @@ function initCharts(){
   new ResizeObserver(()=>{const pw=document.getElementById('price').clientWidth;
     if(pw&&document.getElementById('wtwrap').style.display!=='none')wtchart.applyOptions({width:pw});
     if(pw&&document.getElementById('macdwrap').style.display!=='none')mchart.applyOptions({width:pw});
-    if(pw&&document.getElementById('tpowrap').style.display!=='none')tpochart.applyOptions({width:pw});})
+    if(pw&&document.getElementById('tpowrap').style.display!=='none')tpochart.applyOptions({width:pw});
+    if(pw&&document.getElementById('srsiwrap').style.display!=='none')srsichart.applyOptions({width:pw});})
     .observe(document.getElementById('price'));
   ready=true;
 }
@@ -1347,6 +1394,16 @@ function render(c,meta){
     tpoBuyLine.setData(gapData(disp,tpo.buyLine));tpoSellLine.setData(gapData(disp,tpo.sellLine));
     onTags.push('2POLE');}
   else {tpoLine.setData([]);tpoSig.setData([]);tpoLine.setMarkers([]);tpoBuyLine.setData([]);tpoSellLine.setData([]);}
+  // stochastic RSI (own pane) — %K/%D + OB/OS cross dots. dots only on CLOSED bars
+  // (skip the forming last bar) so a live cross can't repaint.
+  if(ind.srsi){const sq=s.stoch,lastI=disp.length-1;
+    srsiK.setData(gapData(disp,sq.k));srsiD.setData(gapData(disp,sq.d));
+    const dots=[];
+    sq.buys.forEach(i=>{if(i<lastI)dots.push({time:disp[i].time,position:'belowBar',color:'#16ff9e',shape:'circle',text:''});});
+    sq.sells.forEach(i=>{if(i<lastI)dots.push({time:disp[i].time,position:'aboveBar',color:'#ff4d6d',shape:'circle',text:''});});
+    srsiK.setMarkers(dots.sort((a,b)=>a.time-b.time));
+    onTags.push('STOCHRSI');}
+  else {srsiK.setData([]);srsiD.setData([]);srsiK.setMarkers([]);}
   // volumatic VIDYA (price overlay): trend line + flip dots + volume pivot levels
   vidyaLines.forEach(l=>cs.removePriceLine(l));vidyaLines=[];vidyaInfo=null;
   if(ind.vidya){const v=s.vid;
@@ -1391,8 +1448,14 @@ function render(c,meta){
   if(ind.fib){
     const cols={0:'#5b8dff',0.236:'#3a4252',0.382:'#3a4252',0.5:'#ffb020',0.618:'#ffb020',0.786:'#3a4252',1:'#5b8dff'};
     for(const f of fib(disp)){
+      if(f.ext){ // extension target beyond the swing (projected zone)
+        const tcol=f.up?'#16c98a':'#ff4d6d';
+        fibLines.push(cs.createPriceLine({price:f.price,color:tcol,lineWidth:2,lineStyle:2,
+          axisLabelVisible:true,title:'⌖ '+f.r.toFixed(3)+' TGT'}));
+        continue;}
+      const lbl=f.r===0?(f.up?'0 · LOW':'0 · HIGH'):f.r===1?(f.up?'1.0 · HIGH':'1.0 · LOW'):f.r.toFixed(3);
       fibLines.push(cs.createPriceLine({price:f.price,color:cols[f.r]||'#2a3140',lineWidth:1,
-        lineStyle:f.r===0.5||f.r===0.618?0:2,axisLabelVisible:true,title:f.r.toFixed(3)}));
+        lineStyle:f.r===0.5||f.r===0.618?0:2,axisLabelVisible:true,title:lbl}));
     }
     onTags.push('FIB');
   }
@@ -1526,6 +1589,9 @@ document.getElementById('indrow').addEventListener('click',e=>{
   if(key==='tpo'){document.getElementById('tpowrap').style.display=ind.tpo?'':'none';
     if(ind.tpo&&tpochart){tpochart.applyOptions({width:document.getElementById('tpo').clientWidth});
       tpochart.timeScale().setVisibleLogicalRange(pchart.timeScale().getVisibleLogicalRange());}}
+  if(key==='srsi'){document.getElementById('srsiwrap').style.display=ind.srsi?'':'none';
+    if(ind.srsi&&srsichart){srsichart.applyOptions({width:document.getElementById('srsi').clientWidth});
+      srsichart.timeScale().setVisibleLogicalRange(pchart.timeScale().getVisibleLogicalRange());}}
   if(candlesRaw.length)render(candlesRaw,metaCur);});
 document.getElementById('live').onclick=function(){
   this.classList.toggle('on');
@@ -1714,6 +1780,7 @@ const FACTOR_LABEL={rsiOS:'RSI oversold flip',emaReclaim:'Reclaim EMA21',emaCros
   volSpike:'Vol-spike green',rsiOB:'RSI overbought flip',emaLose:'Lose EMA21',
   emaXdn:'EMA9×21 down',volSpikeDn:'Vol-spike red',
   bullDiv:'Bullish RSI div',bearDiv:'Bearish RSI div',tpoBuy:'2-Pole buy cross',tpoSell:'2-Pole sell cross',
+  stochRsiBuy:'StochRSI buy cross',stochRsiSell:'StochRSI sell cross',
   vidyaUp:'VIDYA flip up',vidyaDn:'VIDYA flip down',
   superTrend:'SuperTrend aligned',emaUp:'Above EMA50',emaDn:'Below EMA50',macdUp:'MACD cross up',macdDn:'MACD cross down'};
 let lastAutoId=null;
