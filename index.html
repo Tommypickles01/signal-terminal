@@ -323,7 +323,7 @@
     .terminal{grid-template-columns:1fr;gap:10px}
     .sidebar,.tradepanel{grid-column:auto;position:static;max-height:none}
     #price{height:clamp(300px,46vh,460px)}
-    #rsi{height:96px} #wt{height:104px} #macd{height:104px} #tpo{height:110px}
+    #rsi{height:96px} #wt{height:104px} #macd{height:104px} #tpo{height:110px} #srsi{height:104px}
     .topnav{gap:10px;padding:0 10px;height:50px}
     .nav-stat{display:none}            /* hide ticker stats, keep balance */
     .controls input{min-width:0}
@@ -534,6 +534,23 @@
   body.crt #crtlay{opacity:1}
   body.crt{animation:crtflick 5.5s linear infinite}
   @keyframes crtflick{0%,100%{filter:none}48%{filter:brightness(1.025)}52%{filter:brightness(.99)}}
+  /* ---- LOAD BAR: make the CA input + chain dropdown obvious ---- */
+  .chartctl{align-items:stretch}
+  .chartctl .ctl-lbl{display:flex;align-items:center;font-family:var(--display);
+    font-size:8px;color:var(--mid);letter-spacing:.5px;white-space:nowrap;text-shadow:0 0 8px var(--glow-buy)}
+  #addr{flex:1;min-width:160px;min-height:42px;font-size:13px!important;color:var(--txt)!important;
+    border-color:var(--mid)!important;
+    box-shadow:inset 2px 2px 0 var(--bvd),inset -1px -1px 0 var(--bvl),0 0 0 1px rgba(81,224,255,.30)!important}
+  #addr:focus{outline:none;border-color:var(--buy)!important;
+    box-shadow:inset 2px 2px 0 var(--bvd),0 0 14px rgba(81,224,255,.45)!important}
+  #addr::placeholder{color:#c4b9f2;opacity:1}
+  #chain{min-height:42px;min-width:120px;padding-right:30px!important;cursor:pointer;
+    -webkit-appearance:none;appearance:none;font-size:12px!important;color:var(--txt)!important;
+    border-color:var(--mid)!important;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2351e0ff' stroke-width='2'/%3E%3C/svg%3E")!important;
+    background-repeat:no-repeat!important;background-position:right 10px center!important}
+  #chain option{background:#1c1442;color:#e9e4ff}
+  #load{min-height:42px}
 </style>
 </head>
 <body>
@@ -601,8 +618,9 @@
       <div class="safety" id="safety" style="display:none"></div>
 
       <div class="chartctl">
-        <input id="addr" placeholder="paste DexScreener link or pool/pair address" style="flex:1;min-width:170px" />
-        <select id="chain">
+        <span class="ctl-lbl">TOKEN&nbsp;▸</span>
+        <input id="addr" placeholder="Paste CA / pair address or DexScreener link" style="flex:1;min-width:170px" />
+        <select id="chain" title="Chain this token is on">
           <option value="solana">Solana</option>
           <option value="eth">Ethereum</option>
           <option value="base">Base</option>
@@ -2612,6 +2630,7 @@ fetchSol();setInterval(fetchSol,60000);
 renderWatchlist();
 refreshAllUI();
 </script>
+<div id="crtlay"></div>
 <script>try{if(localStorage.getItem('px_crt')==='1')document.body.classList.add('crt')}catch(e){}</script>
 </body>
 </html>
